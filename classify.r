@@ -57,6 +57,7 @@ clist <- list()
 mlist <- list()
 plist <- list()
 slist <- list()
+tlist <- list()
 
 index <- c(0)
 
@@ -80,13 +81,17 @@ for (num in 1:length(cpth)) {
     mt <- mt[inter,]
 
         # Classify spots
-    print('Initiating iC10 classification... ')
+    flog.info('Initiating iC10 classification... ')
     res <- tryCatch(classify(ct), error = function(e) F)
     
     # if classification is successfull save results    
     if (!is.logical(res)) {
 
       flog.info("Classification Successfull")
+      
+      # grep
+      grp <- regexpr("[0-9]{5}_[A-Z][0-9]",basename(cpth[num]))
+      idx <- substr(basename(cpth[1]), grp[1], grp[1] + attr(grp,'match.length'))
       
       posterior <- res$posterior
       class <- res$class
@@ -100,6 +105,7 @@ for (num in 1:length(cpth)) {
       clist[[num]] <- ct
       mlist[[num]] <- mt
       plist[[num]] <- posterior
+      tlist[[num]] <- idx
       index <- c(index,dim(mt)[1])
 
       # open image file and write
@@ -118,7 +124,8 @@ for (num in 1:length(cpth)) {
       # visualize classification
       g <- ggplot(mt, aes(x = xcoord, y = ycoord)) +
         geom_point(shape = 21, aes(fill = class, color = tumor), size = scale) +
-        scale_colour_manual(values=c("tumor"="black","non"="white"))
+        scale_colour_manual(values=c("tumor"="black","non"="white")) +
+        ggtitle(paste(c(idx,'highest posterior iC10'),collapse = ' '))
       print(g)
       
       #close image file
@@ -154,13 +161,16 @@ clr <- sweep(clr,2,(mx-mn),'/')
 for (pos in 1:(length(index)-1)) {
     srgb <- clr[(index[pos]+1):index[pos+1],]
     srgb = rgb(r = srgb[,1],g = srgb[,2],b = srgb[,3])
+    
+    
     png(file = paste(c(odir,gsub("\\.tsv","\\.umap\\.png",basename(mpth[num]))),collapse = "/"),
         width = 720,
         height = 720)
     
     g <- ggplot(mlist[[pos]], aes(x = xcoord, y = ycoord)) +
-    geom_point(shape = 21, fill = srgb, aes(color = tumor), size = slist[[pos]]) +
-    scale_colour_manual(values=c("tumor"="black","non"="white"))
+      geom_point(shape = 21, fill = srgb, aes(color = tumor), size = slist[[pos]]) +
+      scale_colour_manual(values=c("tumor"="black","non"="white")) + 
+      ggtitle(paste(c(tlist[[pos]],'UMAP compression of posterior'),collapse = ' '))
     print(g)
     dev.off()
 }

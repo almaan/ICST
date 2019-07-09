@@ -3,6 +3,8 @@
 library("argparse")
 library("iC10")
 library("ggplot2")
+library("futile.logger")
+library("umap")
 
 
 # Functions ---------------
@@ -14,6 +16,9 @@ classify <- function(x) {
   
   return(res)
 } 
+
+
+
 
 # Parser ----------------------
 
@@ -32,6 +37,8 @@ parser$add_argument("-o","--output_dir",
 
 args <- parser$parse_args()
 
+print(args)
+
 # Main ----------------------
 
 
@@ -46,10 +53,13 @@ mpth <- sort(mpth)
 # to store loaded data
 clist <- list()
 mlist <- list()
+plist <- list()
+slist <- list()
 
+index <- c(0)
 
 for (num in 1:length(cpth)) {
-    print(sprintf("Analyzing sample %s | %d/%d",cpth[num],num,length(cpth)))
+    flog.info(sprintf("Analyzing sample %s | %d/%d",cpth[num],num,length(cpth)))
     # load count data
     ct <- read.table(cpth[num],
                      sep = '\t',
@@ -61,18 +71,20 @@ for (num in 1:length(cpth)) {
                      header = 1,
                      row.names = 1)
     
+    
     # select only spots found in meta and count data
     inter <- intersect(rownames(ct),rownames(mt))
     ct <- t(ct[inter,])
     mt <- mt[inter,]
-    
-    # Classify spots
+
+        # Classify spots
     print('Initiating iC10 classification... ')
     res <- tryCatch(classify(ct), error = function(e) F)
     
     # if classification is successfull save results    
     if (!is.logical(res)) {
-      print("Classification Successfull")
+
+      flog.info("Classification Successfull")
       
       posterior <- res$posterior
       class <- res$class
@@ -85,21 +97,64 @@ for (num in 1:length(cpth)) {
       # append to lists (for additonal analysis)
       clist[[num]] <- ct
       mlist[[num]] <- mt
-  
+      plist[[num]] <- posterior
+      index <- c(index,dim(mt)[1])
+
       # open image file and write
       png(file = paste(c(odir,gsub("\\.tsv","\\.png",basename(cpth[num]))),collapse = "/"),
           width = 720,
           height = 720)
       
+      libsize <- apply(ct,2,sum)
+      mxlib <- max(libsize)
+      scale <- 4 + (libsize / mxlib) * 6
+      
+      slist[[num]] <-scale
+      
       # visualize classification
       g <- ggplot(mt, aes(x = xcoord, y = ycoord)) +
-            geom_point(shape = 21, aes(fill = class, color = tumor), size = 10) +
-            scale_colour_manual(values=c("tumor"="black","non"="white"))
+        geom_point(shape = 21, aes(fill = class, color = tumor), size = scale) +
+        scale_colour_manual(values=c("tumor"="black","non"="white"))
       print(g)
+      
       #close image file
       dev.off()
       
     }  else {
-      print("Unsuccessful classification")
+      flog.error("Unsuccessful classification")
   }
+}
+
+index <- cumsum(index)
+print(sapply(plist,is.null))
+
+joint_posterior <- data.frame(matrix(0,index[length(index)],dim(posterior)[2]))
+
+for (pos in 1:(length(index)-1)) {
+  joint_posterior[(index[pos]+1):(index[pos+1]),] <- plist[[pos]] 
+}
+
+cnfg <- umap.defaults
+cnfg$n_components <- 3
+
+
+clr <- umap(joint_posterior, config = cnfg)
+clr <- clr$layout
+mx <- apply(clr, 2, max)
+mn <- apply(clr,2,min)
+clr <- sweep(clr,2,mn,'-')
+clr <- sweep(clr,2,(mx-mn),'/')
+
+for (pos in 1:(length(index)-1)) {
+    srgb <- clr[(index[pos]+1):index[pos+1],]
+    srgb = rgb(r = srgb[,1],g = srgb[,2],b = srgb[,3])
+    png(file = paste(c(odir,gsub("\\.tsv","\\.umap\\.png",basename(mpth[num]))),collapse = "/"),
+        width = 720,
+        height = 720)
+    
+    g <- ggplot(mlist[[pos]], aes(x = xcoord, y = ycoord)) +
+    geom_point(shape = 21, fill = srgb, aes(color = tumor), size = slist[[pos]]) +
+    scale_colour_manual(values=c("tumor"="black","non"="white"))
+    print(g)
+    dev.off()
 }

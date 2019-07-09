@@ -80,7 +80,7 @@ for (num in 1:length(cpth)) {
     ct <- t(ct[inter,])
     mt <- mt[inter,]
 
-        # Classify spots
+    # Classify spots
     flog.info('Initiating iC10 classification... ')
     res <- tryCatch(classify(ct), error = function(e) F)
     
@@ -89,7 +89,7 @@ for (num in 1:length(cpth)) {
 
       flog.info("Classification Successfull")
       
-      # grep
+      # grep for sample id
       grp <- regexpr("[0-9]{5}_[A-Z][0-9]",basename(cpth[num]))
       idx <- substr(basename(cpth[1]), grp[1], grp[1] + attr(grp,'match.length'))
       

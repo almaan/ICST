@@ -139,6 +139,7 @@ for (num in 1:length(cpth)) {
 # compute indices for each replicate in joint matrix
 index <- cumsum(index)
 
+flog.info("Generate compressed visualization")
 # create joint matrix
 joint_posterior <- data.frame(matrix(0,index[length(index)],dim(posterior)[2]))
 for (pos in 1:(length(index)-1)) {
@@ -157,6 +158,7 @@ mn <- apply(clr,2,min)
 clr <- sweep(clr,2,mn,'-')
 clr <- sweep(clr,2,(mx-mn),'/')
 
+flog.info("Save compressed visualization")
 # split joint matrix and plot compressed visualization
 for (pos in 1:(length(index)-1)) {
     srgb <- clr[(index[pos]+1):index[pos+1],]
@@ -174,3 +176,4 @@ for (pos in 1:(length(index)-1)) {
     print(g)
     dev.off()
 }
+flog.info("Analysis Complete")

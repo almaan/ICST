@@ -163,7 +163,7 @@ for (pos in 1:(length(index)-1)) {
     srgb = rgb(r = srgb[,1],g = srgb[,2],b = srgb[,3])
     
     
-    png(file = paste(c(odir,gsub("\\.tsv","\\.umap\\.png",basename(mpth[num]))),collapse = "/"),
+    png(file = paste(c(odir,gsub("\\.tsv","\\.umap\\.png",basename(mpth[pos]))),collapse = "/"),
         width = 720,
         height = 720)
     

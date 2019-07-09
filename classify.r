@@ -41,6 +41,8 @@ print(args)
 
 # Main ----------------------
 
+MNS <- 4
+MXS <- 10
 
 cpth <- args$count_file
 mpth <- args$meta_file
@@ -105,10 +107,12 @@ for (num in 1:length(cpth)) {
           width = 720,
           height = 720)
       
+      # scale according to spot library size
       libsize <- apply(ct,2,sum)
       mxlib <- max(libsize)
-      scale <- 4 + (libsize / mxlib) * 6
+      scale <- MNS + (libsize / mxlib) * (MXS - MNS)
       
+      # store scaling factors
       slist[[num]] <-scale
       
       # visualize classification
@@ -125,26 +129,28 @@ for (num in 1:length(cpth)) {
   }
 }
 
+# compute indices for each replicate in joint matrix
 index <- cumsum(index)
-print(sapply(plist,is.null))
 
+# create joint matrix
 joint_posterior <- data.frame(matrix(0,index[length(index)],dim(posterior)[2]))
-
 for (pos in 1:(length(index)-1)) {
   joint_posterior[(index[pos]+1):(index[pos+1]),] <- plist[[pos]] 
 }
 
+# compress with umap
 cnfg <- umap.defaults
 cnfg$n_components <- 3
 
-
 clr <- umap(joint_posterior, config = cnfg)
 clr <- clr$layout
+# normalize 
 mx <- apply(clr, 2, max)
 mn <- apply(clr,2,min)
 clr <- sweep(clr,2,mn,'-')
 clr <- sweep(clr,2,(mx-mn),'/')
 
+# split joint matrix and plot compressed visualization
 for (pos in 1:(length(index)-1)) {
     srgb <- clr[(index[pos]+1):index[pos+1],]
     srgb = rgb(r = srgb[,1],g = srgb[,2],b = srgb[,3])

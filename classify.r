@@ -15,44 +15,103 @@ sh(library("RColorBrewer"))
 # Functions ---------------
 
 l2_dist <- function(x) {
-  return(1.0 / dist(x))
+  # Similarity measure based on l2 norm
+  # 
+  # Args:
+  #   x: 2xnfeatures matrix containing 
+  #       where rows represent the vectors
+  #       for which similarity is to be
+  #       determined
+  # Returns:
+  #   similarity l2-based similariy of vectors
+  return(1.0 / dist(x) ^ 2)
 }
 
 cos_dist <- function(x) {
+  # Similarity measure based on angle between vectors
+  # 
+  # Args:
+  #   x: 2xnfeatures matrix containing 
+  #       where rows represent the vectors
+  #       for which similarity is to be
+  #       determined
+  # Returns:
+  #   cosine based similariy of vectors
+  
   nx <- x[1,] / sqrt(x[1,] %*% x[1,])
   ny <- x[2,] / sqrt(x[2,] %*% x[2,])
-  return( 1.0 - (nx %*% ny))
+  return( 1.0 + (nx %*% ny))
 }
 
 
 pool_by_membership <- function(cnt, labels) {
+  # Pool spots with same labels
+  #
+  # Args:
+  #   cnt: n_spots x n_genes - count matrix
+  #   labels: n_spots - vector of labels
+  # Returns:
+  #   n_labels x n_genes - pooled count matrix
+  
   n_labels <- length(unique(labels))
   n_genes <- dim(cnt)[2]
   pooled <- as.data.frame(matrix(0,nrow = n_labels,ncol = n_genes))
   colnames(pooled) <- colnames(cnt)
   for (label in unique(labels)) {
     idx <- which(labels == label)
-    pooled[label,] <- colMeans(cnt[idx,])
+    if (length(idx) > 1) {
+      pooled[label,] <- colMeans(cnt[idx,])
+    } else {
+      pooled[label,] <- cnt[idx,]
+    }
   }
+  
   return(pooled)
 }
 
 
-classify <- function(x) {
-  features <- matchFeatures(Exp=x, Exp.by.feat="gene")
-  features <- normalizeFeatures(features, "scale")
+classify <- function(x,
+                     feat = 'gene',
+                     method = 'scale') {
+  # classify samples using iC10
+  # 
+  # Args:
+  #   x: n_genes x n_samples - count matrix
+  #   feat: string - type of gene identifiers (gene for HGNC)
+  #   method: string - type of normalizing method.
+  #                     see normalizeFeatures for more
+  # Returns:
+  #   iC10 results object
+  
+  features <- matchFeatures(Exp=x, Exp.by.feat=feat)
+  features <- normalizeFeatures(features, method)
   res <- iC10(features)
   
   return(res)
 } 
 
 
-louvain_clustering <- function(xx,yy,datum) {
+louvain_clustering <- function(xx,yy,datum,nn = 8) {
+  # Assemble graph and perform louvain clustering
+  # based on spatial and gene-expression information
+  # Args:
+  #   xx: n_samples x 1 - vector of x-coordinates
+  #   yy: n_samples x 1 - vector of y-coordinates
+  #   datum: n_samples x n_genes - matrix of expression data 
+  #   nn: integer - number of neighbours to use
+  #
+  # Returns:
+  #   list with graph, layout, labels, number of communities
+  
+  eps <- 0.01
+  radius <- c('4' = (1 + eps),
+              '8' = (sqrt(2) + eps))
+  
   crd <- data.frame(x= xx, y = yy)
   nbr <- nn2(crd,crd,
-             k = 9,
+             k = nn + 1,
              searchtype = 'radius',
-             radius = 1.5)[[1]]
+             radius = radius[as.character(nn)])[[1]]
   
   tov <- c()
   frv <- c()
@@ -75,7 +134,10 @@ louvain_clustering <- function(xx,yy,datum) {
   edges <- unique(tedges)
   weights <- weights[which(rownames(edges) %in% rownames(tedges))] 
   
-  graph <- graph_from_data_frame(edges, directed=FALSE, vertices=rownames(crd))
+  graph <- graph_from_data_frame(edges,
+                                 directed=FALSE,
+                                 vertices=rownames(crd))
+  
   lov <- cluster_louvain(graph, weights = weights)
   lo <- norm_coords(as.matrix(crd))
   ncomms <- length(unique(lov$membership))
@@ -104,8 +166,11 @@ parser$add_argument("-m","--meta_file",
 
 parser$add_argument("-dm","--distance_metric",
                     type = "character",
-                    default = "l2",
-                    nargs = "+")
+                    default = "l2")
+
+parser$add_argument("-nn","--n_neighbours",
+                    type = "integer",
+                    default = 8)
 
 parser$add_argument("-o","--output_dir",
                     type = "character",
@@ -125,9 +190,11 @@ for (ii in 1:NCL) {
   CMAP[[as.character(ii)]] <- brwr[ii]
 }
 
-# Set variables for scaling
+# Set variables for visualization
 MNS <- 4
 MXS <- 10
+FIGHEIGHT <- 720
+FIGWIDTH <- 720
 
 cpth <- args$count_file
 mpth <- args$meta_file
@@ -135,8 +202,21 @@ odir <- args$output_dir
 
 # set logger details
 tag <- format(Sys.time(), "%Y%m%d%H%m%s")
-logfile <- paste(odir,paste('STiC10-analysis',tag,'log',sep = '.'),sep='/')
-flog.appender(appender.tee(logfile), name='ROOT')
+logfile <- paste(odir,
+                 paste('STiC10-analysis',
+                       tag,
+                       'log',
+                       sep = '.'),
+                 sep='/')
+
+flog.appender(appender.tee(logfile),
+              name='ROOT')
+
+args$n_neighbours <- ifelse(test = args$n_neighbours %in% c(4,8),
+                            yes = args$n_neighbours,
+                            no = 4)
+
+flog.info(sprintf("Using %d member neighbourhood", args$n_neighbours))
 
 # set desired distance function
 if (args$distance_metric == 'cos') {
@@ -164,7 +244,7 @@ for (num in 1:length(cpth)) {
     
     # grep for sample id
     grp <- regexpr("[0-9]{5}_[A-Z][0-9]",basename(cpth[num]))
-    idx <- substr(basename(cpth[1]), grp[1], grp[1] + attr(grp,'match.length'))
+    idx <- substr(basename(cpth[num]), grp[1], grp[1] + attr(grp,'match.length'))
   
     flog.info(sprintf("Analyzing sample %s | %d/%d",cpth[num],num,length(cpth)))
     # load count data
@@ -192,12 +272,19 @@ for (num in 1:length(cpth)) {
     nct <- as.matrix(nct)
     xcrd <- as.numeric(unlist(mt['xcoord']))
     ycrd <- as.numeric(unlist(mt['ycoord']))
-    lov_res <- louvain_clustering(xcrd,ycrd,nct)
-    flog.info(sprintf("Found a total of %d communities for sample %s", lov_res$ncomms,idx))
+    lov_res <- louvain_clustering(xx = xcrd,
+                                  yy = ycrd,
+                                  datum = nct,
+                                  nn = args$n_neighbours)
+    
+    flog.info(sprintf("Found a total of %d communities for sample %s",
+                      lov_res$ncomms,idx))
     
     # Create pseudo data for joint analysis
     flog.info("Pool spots")
-    pct <- pool_by_membership(ct,lov_res$membership)
+    # use relative frequencies in pooling
+    pct <- pool_by_membership(nct,
+                              lov_res$membership)
     
     # Classify spots
     flog.info('Initiating iC10 classification... ')
@@ -226,8 +313,8 @@ for (num in 1:length(cpth)) {
 
       # open image file and write
       png(file = paste(c(odir,gsub("\\.tsv","\\.png",basename(cpth[num]))),collapse = "/"),
-          width = 720,
-          height = 720)
+          width = FIGWIDTH,
+          height = FIGHEIGHT)
       
       # scale according to spot library size
       libsize <- apply(ct,1,sum)
@@ -238,11 +325,23 @@ for (num in 1:length(cpth)) {
       slist[[num]] <-scale
       
       # visualize classification
-      g <- ggplot(mt, aes(x = xcoord, y = ycoord)) +
-        geom_point(shape = 21, aes(fill = class, color = tumor), size = scale) +
-        scale_colour_manual(values=c("tumor"="black","non"="white")) +
+      g <- ggplot(mt,
+                  aes(x = xcoord,
+                      y = ycoord)
+                  ) +
+        
+        geom_point(shape = 21,
+                   aes(fill = class,
+                       color = tumor),
+                   size = scale) +
+        
+        scale_colour_manual(values=c("tumor"="black",
+                                     "non"="white")) +
+        
         scale_fill_manual(values=CMAP) +
+        
         ggtitle(paste(c(idx,'highest posterior iC10'),collapse = ' '))
+      
       print(g)
       
       #close image file
@@ -269,7 +368,8 @@ cnfg$n_components <- 3
 
 clr <- umap(joint_posterior, config = cnfg)
 clr <- clr$layout
-# normalize 
+
+# map values to unit cube 
 mx <- apply(clr, 2, max)
 mn <- apply(clr,2,min)
 clr <- sweep(clr,2,mn,'-')
@@ -281,15 +381,29 @@ for (pos in 1:(length(index)-1)) {
     srgb <- clr[(index[pos]+1):index[pos+1],]
     srgb = rgb(r = srgb[,1],g = srgb[,2],b = srgb[,3])
     
-    filename <- paste(c(odir,gsub("\\.tsv","\\.umap\\.png",basename(mpth[pos]))),collapse = "/")
-    png(file = filename,
-        width = 720,
-        height = 720)
+    filename <- paste(c(odir,gsub("\\.tsv","\\.umap\\.png",
+                                  basename(mpth[pos]))),
+                      collapse = "/")
     
-    g <- ggplot(mlist[[pos]], aes(x = xcoord, y = ycoord)) +
-      geom_point(shape = 21, fill = srgb, aes(color = tumor), size = slist[[pos]]) +
-      scale_colour_manual(values=c("tumor"="black","non"="white")) + 
-      ggtitle(paste(c(tlist[[pos]],'UMAP compression of posterior'),collapse = ' '))
+    png(file = filename,
+        width = FIGWIDTH,
+        height = FIGHEIGHT)
+    
+    g <- ggplot(mlist[[pos]],
+                aes(x = xcoord,
+                    y = ycoord)) +
+      
+      geom_point(shape = 21, 
+                 fill = srgb,
+                 aes(color = tumor),
+                 size = slist[[pos]]) +
+      
+      scale_colour_manual(values=c("tumor"="black",
+                                   "non"="white")) +
+      
+      ggtitle(paste(c(tlist[[pos]],
+                      'UMAP compression of posterior'),
+                    collapse = ' '))
     
     print(g)
     dev.off()

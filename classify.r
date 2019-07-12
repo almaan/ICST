@@ -69,6 +69,27 @@ pool_by_membership <- function(cnt, labels) {
   return(pooled)
 }
 
+consensus_class <- function(posteriors,labels) {
+  # Make consensus vote among members of the same
+  # class
+  
+  unilabs <- unique(labels)
+  n_labels <- length(unilabs)
+  majclass <- rep(0,dim(posteriors)[1])
+
+    
+  for (label in unilabs) {
+    idx <- which(labels == label)
+    tpost <- (log(posteriors[idx,]))
+    if (length(idx) > 1) {
+      tpost <- colSums(tpost)
+    }
+    mxCl <- which(tpost == max(tpost))
+    majclass[idx] <- mxCl
+  }
+  return(majclass)
+}
+
 
 classify <- function(x,
                      feat = 'gene',
@@ -282,13 +303,10 @@ for (num in 1:length(cpth)) {
     
     # Create pseudo data for joint analysis
     flog.info("Pool spots")
-    # use relative frequencies in pooling
-    pct <- pool_by_membership(nct,
-                              lov_res$membership)
-    
+
     # Classify spots
     flog.info('Initiating iC10 classification... ')
-    res <- tryCatch(classify(t(pct)), error = function(e) F)
+    res <- tryCatch(classify(t(nct)), error = function(e) F)
     
     # if classification is successfull save results    
     if (!is.logical(res)) {
@@ -296,9 +314,14 @@ for (num in 1:length(cpth)) {
       flog.info("Classification Successfull")
       
       
-      posterior <- res$posterior[lov_res$membership,]
-      class <- res$class[lov_res$membership]
+      posterior <- res$posterior
+      rawclass <- res$class
+
+      class <- consensus_class(posterior,lov_res$membership)
+      class <- as.factor(class)
+
       # add class and posterior information to metadata
+      mt <- cbind(mt,rawclass)
       mt <- cbind(mt,class)
       mt <- cbind(mt,posterior)
       # save new meta data

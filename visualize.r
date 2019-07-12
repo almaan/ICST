@@ -151,7 +151,7 @@ if (args$scatter_plot) {
                      )
     
     
-    goi <- (df$expr > quantile(df$expr,0.99))
+    goi <- df$expr >= sort(df$expr,decreasing = T)[min(length(df$expr),100)]
     df$goi <- goi
     
     df <- df[sample(nrow(df)),]    
@@ -168,7 +168,8 @@ if (args$scatter_plot) {
             annotate("text", x = df$var[df$goi],
                              y = df$expr[df$goi],
                              label = df$genes[df$goi],
-                             hjust = 0, vjust = 0)
+                             hjust = 0,
+                             vjust = 0)
     
     imgname <- paste(args$output_dir,paste("expr_v_var","png", sep = '.'),sep = '/')
 

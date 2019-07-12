@@ -1,8 +1,8 @@
 #!/usr/bin/Rscript
 
 chr_dist <- function(cnt,
+                     gene_mapping,
                      nbins = 100,
-                     gene_mapping = NULL,
                      edges = NULL,
                      binsize = NULL) {
 
@@ -11,10 +11,10 @@ chr_dist <- function(cnt,
     #
     # Args:
     #   cnt - count matrix (n_spots x n_genes)
-    #   nbins - number of bins to use
     #   gene_mapping - dataframe with genes as rows,
     #                   chromosomal start/end position
     #                   and chromosome number as columns
+    #   nbins - number of bins to use
     #   edges - n_bins x 2 data frame with lower edges
     #               stored in column "ledge" and upper
     #               edges stored in column "uedge".
@@ -29,19 +29,7 @@ chr_dist <- function(cnt,
 
     
     # set gene to chromosome position mapping object
-    if (!is.null(gene_mapping)) {
-
-    # if provided mapping object then use this
-        G2CHR <- gene_mapping
-    } else {
-
-    # otherwise read default mapping file
-        G2CHR <- read.table("data/g2chr.tsv",
-                        sep = '\t',
-                        header = 1,
-                        row.names = 1,
-                        stringsAsFactors = F)
-    }
+    G2CHR <- gene_mapping
 
     inter <- intersect(colnames(cnt),rownames(G2CHR))
     success_map <- length(inter) / ncol(cnt)

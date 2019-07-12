@@ -1,12 +1,22 @@
 #!/usr/bin/Rscript
 
-chr_dist <- function(cnt, nbins = 100, gene_mapping = NULL) {
+chr_dist <- function(cnt,
+                     nbins = 100,
+                     gene_mapping = NULL,
+                     edges = NULL) {
+
     # Map observered transcript to binned chromosome
     # position
     #
     # Args:
     #   cnt - count matrix (n_spots x n_genes)
     #   nbins - number of bins to use
+    #   gene_mapping - dataframe with genes as rows,
+    #                   chromosomal start/end position
+    #                   and chromosome number as columns
+    #   edges - n_bins x 2 data frame with lower edges
+    #               stored in column "ledge" and upper
+    #               edges stored in column "uedge".
     #
     # Return:
     #   list with bin information (upper and lower edge)
@@ -62,18 +72,10 @@ chr_dist <- function(cnt, nbins = 100, gene_mapping = NULL) {
     chrs <- gsub('24','Y',chrs)
     seqlths <- as.numeric(seqlths[chrs])
     names(seqlths) <- chrs
-    
-    cumseqlths <- cumsum(as.numeric(seqlths))
+   
+    cumseqlths <- cumsum(c(0,as.numeric(seqlths[-length(seqlths)])))
     names(cumseqlths) <- chrs
-    # constructed edges for bins
-    xmin <- 0
-    xmax <- tail(cumseqlths,1)
-    ledge <- seq(xmin,xmax, length.out = (nbins + 1))
-    uedge <- ledge + diff(ledge)[1]
-    
-    ledge <- ledge[-length(ledge)]
-    uedge <- uedge[-length(uedge)]
-    
+
     # get chromosomal position for genes  
     startpos <- G2CHR[colnames(cnt),"start_position"] 
     endpos <- G2CHR[colnames(cnt),"end_position"]
@@ -83,6 +85,31 @@ chr_dist <- function(cnt, nbins = 100, gene_mapping = NULL) {
     startpos <- startpos + as.numeric(cumseqlths[chrpos])
     endpos <- endpos + as.numeric(cumseqlths[chrpos])
    
+    # setup edges for bins
+    xmin <- 0
+    xmax <- as.numeric(tail(cumseqlths,1))
+  
+    if (is.null(edges)) {
+        # generate bins
+        ledge <- seq(xmin,xmax, length.out = (nbins + 1))
+        uedge <- ledge + diff(ledge)[1]
+        
+        ledge <- ledge[-length(ledge)]
+        uedge <- uedge[-length(uedge)]
+    } else {
+        # use user-defined edges
+        cnames <- c("ledge","uedge")
+        hascols <- all(apply(sapply(colnames(edges),grepl,cnames,1,any)))
+        
+        if (!hascols) {
+            print("Provided edges are not compatible")
+            return(NULL)
+        }
+
+        ledge <- as.numeric(edges$ledge)
+        uedge <- as.numeric(edges$uedge)
+    }
+
     # get number of transcripts falling into each bin
     bincount <- matrix(0,
                        nrow = nrow(cnt),

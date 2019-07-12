@@ -3,7 +3,8 @@
 chr_dist <- function(cnt,
                      nbins = 100,
                      gene_mapping = NULL,
-                     edges = NULL) {
+                     edges = NULL,
+                     binsize = NULL) {
 
     # Map observered transcript to binned chromosome
     # position
@@ -17,6 +18,8 @@ chr_dist <- function(cnt,
     #   edges - n_bins x 2 data frame with lower edges
     #               stored in column "ledge" and upper
     #               edges stored in column "uedge".
+    #   binsize - desired binsize. Use as alternative to
+    #               nbins
     #
     # Return:
     #   list with bin information (upper and lower edge)
@@ -90,25 +93,21 @@ chr_dist <- function(cnt,
     xmax <- as.numeric(tail(cumseqlths,1))
   
     if (is.null(edges)) {
+        if (is.null(binsize)) {
         # generate bins
-        ledge <- seq(xmin,xmax, length.out = (nbins + 1))
+            ledge <- seq(xmin,xmax, length.out = (nbins + 1))
+        } else {
+            ledge <- seq(xmin,xmax, length.out = binsize)
+        }
         uedge <- ledge + diff(ledge)[1]
-        
         ledge <- ledge[-length(ledge)]
         uedge <- uedge[-length(uedge)]
-    } else {
+     } else {
         # use user-defined edges
-        cnames <- c("ledge","uedge")
-        hascols <- all(apply(sapply(colnames(edges),grepl,cnames,1,any)))
-        
-        if (!hascols) {
-            print("Provided edges are not compatible")
-            return(NULL)
-        }
-
-        ledge <- as.numeric(edges$ledge)
-        uedge <- as.numeric(edges$uedge)
-    }
+        nbins = nrow(edges)
+        ledge <- as.numeric(unlist(edges$ledge))
+        uedge <- as.numeric(unlist(edges$uedge))
+     }
 
     # get number of transcripts falling into each bin
     bincount <- matrix(0,
@@ -140,4 +139,71 @@ chr_dist <- function(cnt,
     
     return(result)
 }
+
+
+make_g2chr <- function(genes,
+                       genes_sep = '\n',
+                       dataset="hsapiens_gene_ensembl",
+                       host="grch37.ensembl.org",
+                       path="/biomart/martservice"){
+    
+    # Make reference data frame which allows for
+    # mapping of a gene (by hgnc symbol) to relative
+    # chromosome position
+    # Args:
+    #   genes : character vector containing genes 
+    #               to be included in reference
+    #   dataset : biomart dataset
+    #   host    : biomart host  
+    #   path    : biomart path
+    # Return:
+    #   dataframe with columns "hgnc_symbol","start_position", 
+    #       "end_position" and "chromosome_name". To be used as
+    #       a reference when mapping genes to chromosomes
+
+    library(biomaRt)
+
+    genes <- unlist(genes)
+    
+    # create mart object
+    mart  <- useMart("ensembl",
+                     dataset=dataset,
+                     host=host,
+                     path=path)
+    
+    # specify attributes and flters to use
+    attribs <- c("hgnc_symbol",
+                 "start_position",
+                 "end_position",
+                 "chromosome_name")
+
+    filters <- c("hgnc_symbol")
+    
+    # retrieve attributes for genes
+    mapped <- getBM(attributes = attribs,
+                    filters = filters,
+                    values = genes,
+                    mart = mart)
+
+    # remove duplicate hits. Keeps first
+    mapped <- mapped[!(duplicated(mapped$hgnc_symbol)),]
+    
+    # use intersecting set of genes
+    inter <- intersect(genes,
+                       mapped$hgnc_symbol)
+
+    mapped <- mapped[mapped$hgnc_symbol %in% inter,]
+    genes <- genes[inter]
+    
+    # remove genes with unvalid chromosome name
+    valnames <- c(as.character(c(1:22)),"X","Y")
+    validchr <- mapped$chromosome_name %in% valnames
+    mapped <- mapped[validchr,]
+    
+    # set rownames to symbols
+    rownames(mapped) <- mapped$hgnc_symbol
+    
+    return(mapped)
+}
+ 
 

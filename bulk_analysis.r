@@ -51,10 +51,22 @@ parser$add_argument("-o","--output_dir",
                     type = "character",
                     default = "/tmp")
 
+parser$add_argument("-gs","--gene_set",
+                    type = "character",
+                    default = NULL)
+
 
 args <- parser$parse_args()
 
 # Main -----------------------------
+
+if (!(is.null(args$gene_set))) {
+    gene_set <- read.csv(args$gene_set,
+                         sep = '\t')
+} else {
+    gene_set <- NULL
+}
+
 
 # set variables
 select_for <- args$select_for
@@ -64,7 +76,7 @@ mpth <- args$meta_file
 ofilename <- paste(gsub(":|-| |","",
                         as.character(Sys.time())),
                         "bulk_analysis",
-                        'png',sep = '.')
+                        sep = '.')
 
 opth <- paste(args$output_dir,ofilename, sep = '/')
 print(opth)
@@ -111,6 +123,15 @@ for (section in 1:length(cpth)) {
     
     # get relative frequencies of counts
     ct <- sweep(ct,1,rowSums(ct),'/')
+
+    if (!(is.null(args$gene_set))) {
+            gene_set <- read.csv(args$gene_set,
+                                 sep = '\t')
+    
+            cinter <- intersect(gene_set,colnames(ct)) 
+            ct <- ct[,cinter]
+    }
+
     # store count and meta data
     clist[[section]] <- ct
     mlist[[section]] <- mt
@@ -130,6 +151,7 @@ for (section in 1:length(cpth)) {
                       eta))
 
 }
+
 
 # number of genes present in data 
 ngenes <- length(unigenes)
@@ -170,7 +192,7 @@ nclasses <- ncol(ic10_res$posterior)
 # prepare columns for long-format used in ggplot
 
 # patient id
-patient_id <-  as.factor(unlist(lapply(unipatient,
+patient_id <-  (unlist(lapply(unipatient,
                              function(x) {rep(x,nclasses)})
                          ))
 # posterior probabilities
@@ -185,6 +207,12 @@ plotdf <- data.frame(patient = patient_id,
                      IC = classname,
                      y = posteriors)
 
+write.table(plotdf,
+          paste(opth,"tsv",sep = '.'),
+          sep = '\t',
+          col.names = T,
+          row.names = T,
+          quote = F)
 
 flog.info(sprintf("Saving plot to : %s", opth))
 
@@ -197,7 +225,7 @@ g <- ggplot(plotdf,
         geom_bar(stat = "identity",
                  position = "fill")
 
-png(opth,
+png(paste(opth,"png", sep = "."),
     width = 2100,
     height = 500)
 

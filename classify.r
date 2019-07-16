@@ -197,6 +197,12 @@ parser$add_argument("-o","--output_dir",
                     type = "character",
                     default = "/tmp/ic10")
 
+parser$add_argument("-r","--label_type",
+                    type = "character",
+                    default = "louvain")
+
+
+
 args <- parser$parse_args()
 
 print(args)
@@ -293,13 +299,19 @@ for (num in 1:length(cpth)) {
     nct <- as.matrix(nct)
     xcrd <- as.numeric(unlist(mt['xcoord']))
     ycrd <- as.numeric(unlist(mt['ycoord']))
-    lov_res <- louvain_clustering(xx = xcrd,
-                                  yy = ycrd,
-                                  datum = nct,
-                                  nn = args$n_neighbours)
-    
+    if (strcmp(args$label_type, 'annotation'))  {
+        region_labels <- as.vector(unlist(mt$tumor))
+    } else {
+
+        pool_res <- louvain_clustering(xx = xcrd,
+                                       yy = ycrd,
+                                       datum = nct,
+                                       nn = args$n_neighbours)
+        
+        region_labels <- pool_res$membership
+    } 
     flog.info(sprintf("Found a total of %d communities for sample %s",
-                      lov_res$ncomms,idx))
+                      pool_res$ncomms,idx))
     
     # Create pseudo data for joint analysis
     flog.info("Pool spots")
@@ -317,7 +329,7 @@ for (num in 1:length(cpth)) {
       posterior <- res$posterior
       rawclass <- res$class
 
-      class <- consensus_class(posterior,lov_res$membership)
+      class <- consensus_class(posterior,region_labels)
       class <- as.factor(class)
 
       # add class and posterior information to metadata

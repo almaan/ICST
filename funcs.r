@@ -85,7 +85,8 @@ chr_dist <- function(cnt,
         # generate bins
             ledge <- seq(xmin,xmax, length.out = (nbins + 1))
         } else {
-            ledge <- seq(xmin,xmax, length.out = binsize)
+            ledge <- seq(xmin,xmax, by = binsize)
+            nbins <- length(ledge) - 1
         }
         uedge <- ledge + diff(ledge)[1]
         ledge <- ledge[-length(ledge)]
@@ -96,7 +97,6 @@ chr_dist <- function(cnt,
         ledge <- as.numeric(unlist(edges$ledge))
         uedge <- as.numeric(unlist(edges$uedge))
      }
-
     # get number of transcripts falling into each bin
     bincount <- matrix(0,
                        nrow = nrow(cnt),

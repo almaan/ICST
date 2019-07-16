@@ -79,7 +79,9 @@ load_multiple <- function(cpths,
     }
   
     # list of joined marices
-    joint <- list(count_data = cjoint, meta_data = mjoint)
+    joint <- list(count_data = cjoint,
+                  meta_data = mjoint,
+                  cumsum = cumsum)
 
     return(joint)
 

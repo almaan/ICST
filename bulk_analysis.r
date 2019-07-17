@@ -63,7 +63,8 @@ args <- parser$parse_args()
 
 if (!(is.null(args$gene_set))) {
     gene_set <- read.csv(args$gene_set,
-                         sep = '\t')
+                         sep = '\n',
+                         header = 1)
 } else {
     gene_set <- NULL
 }

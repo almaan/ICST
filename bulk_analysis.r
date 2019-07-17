@@ -74,9 +74,11 @@ select_for <- args$select_for
 cpth <- args$count_file
 mpth <- args$meta_file
 # set output name
+seltag <- ifelse(is.null(args$select_for),"all",args$select_for)
 ofilename <- paste(gsub(":|-| |","",
                         as.character(Sys.time())),
                         "bulk_analysis",
+                        seltag,
                         sep = '.')
 
 opth <- paste(args$output_dir,ofilename, sep = '/')
@@ -89,6 +91,7 @@ mpth <- sort(mpth)
 clist <- list()
 mlist <- list()
 plist <- c()
+ilist <- c()
 unigenes <- c()
 num <- 0 
 
@@ -118,10 +121,13 @@ for (section in 1:length(cpth)) {
     if (!(is.null(select_for))) {
             flog.info(sprintf("Select only spots with annotation : %s",select_for))
             idx <- which(mt$tumor == select_for)
+
+            # control if spots of selected feature exist
             if (length(idx) > 0) {
                 ct <- ct[idx,]
                 mt <- mt[idx,]
                 num <- num + 1
+                ilist <- c(ilist,cpth[section])
             } else {
                flog.info(sprintf("Sample %s did not have any %s spots", cpth[section], select_for))
                cpth[section] <- "BAD"
@@ -129,6 +135,7 @@ for (section in 1:length(cpth)) {
             }
     } else {
         num <- num +1
+        ilist <- c(ilist,cpth[section])
     }
     
     # get relative frequencies of counts
@@ -182,6 +189,8 @@ flog.info("Pooling sections from the same patient")
 for (patient in 1:npatients) {
     # get which sections that belong to patient
     idx <- which(unipatient[patient] == plist)
+    flog.info("Pooling >> ")
+    flog.info(ilist[idx])
     # number of sections for patient
     nsections <- length(idx)
     # pool sections

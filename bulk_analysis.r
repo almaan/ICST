@@ -65,6 +65,7 @@ if (!(is.null(args$gene_set))) {
     gene_set <- read.csv(args$gene_set,
                          sep = '\n',
                          header = 1)
+    gene_set <- as.character(unlist(gene_set))
 } else {
     gene_set <- NULL
 }
@@ -143,9 +144,6 @@ for (section in 1:length(cpth)) {
     ct <- sweep(ct,1,rowSums(ct),'/')
 
     if (!(is.null(args$gene_set))) {
-            gene_set <- read.csv(args$gene_set,
-                                 sep = '\t')
-    
             cinter <- intersect(gene_set,colnames(ct)) 
             ct <- ct[,cinter]
     }

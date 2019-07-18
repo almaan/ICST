@@ -198,7 +198,7 @@ make_g2chr <- function(genes,
 getEnrichementScore <- function(cnt,
                                 gset,
                                 mass = 0.8,
-                                tse = NULL) {
+                                tset = NULL) {
     # Computes enrichement score for a given
     #   set of spots with known expression.
     #

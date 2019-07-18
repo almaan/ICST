@@ -195,3 +195,119 @@ make_g2chr <- function(genes,
 }
  
 
+getEnrichementScore <- function(cnt,
+                                gset,
+                                mass = 0.8,
+                                tse = NULL) {
+    # Computes enrichement score for a given
+    #   set of spots with known expression.
+    #
+    # Args: 
+    #   cnt - (n_spots x n_genes) coint matrix
+    #   gset - vector with genes to assess
+    #            enrichment of 
+    #   mass - what fraction of the transcripts
+    #           the top set should make up
+    # 
+    #   tset - total set of genes. If not provided
+    #            use all genes present in count matrix
+    # Returns:
+    #   Enrichment score for each spot
+    
+    getTopNames <- function(sct,
+                            names,
+                            mass = 0.8) {
+        # Get names of the genes whose counts
+        #   contsitute a given (mass) proportion
+        #   of the total number of transcripts
+        #   in a given spot
+        #
+        # Args: 
+        #   sct - (n_genes,) vector containing the
+        #       expression vector of a certain spot
+        #   names - (n_genes,) name of genes, matched
+        #       with sct
+        #   mass - what fraction of the transcripts
+        #           the top set should make up
+        # Returns:
+        #   The set of genes containing a given
+        #    proportion of the total number of
+        #    observed transcripts
+ 
+
+        # get ordered indices
+        idx <- order(sct,decreasing = T) 
+        # compute cummulative sum
+        sel <- cumsum(sct[idx])
+        # get value corresponding to desired
+        # proportion of transcript mass
+        q <- mass * sel[length(sel)]
+
+        return(names[idx][sel <= q])
+    
+    }
+    
+    
+    
+    doHyperGeometric <- function(sptset,
+                                 gset,
+                                 tset) {
+
+        # Conduct a hyper-geometric test
+        # to obtain pvalue of intersection size
+        # between two sets
+        #
+        # Args:
+        #   sptset - vector with gene names
+        #       associated to a spot. Top genes,
+        #   gset - vector with set of names
+        #           for genes of interest
+        #   tset - vector with set of names
+        #           for all observed genes
+        # Returns:
+        #   Pvalue of having an intersection 
+        #       equal or larger than the
+        #       observed value
+        
+        # get intersection of set of intereset
+        # and spot associated set
+        inter <- intersect(sptset,gset)
+        # get cardinality of full set 
+        N <- length(tset)
+        # cardinality of spotset 
+        m <- length(sptset)
+        # cardinality of complement to spotset
+        n <- N - m 
+        # cardinality of set of intereset
+        k <- length(gset)
+        # cardinality of intersection
+        x <- length(inter) 
+        # do hypergeomatric test
+        p <- phyper(x-1, m,n,k, lower.tail = F, log.p = F) 
+        
+        return (p)
+    }
+    
+    if (is.null(tset)) {
+        tset <- colnames(cnt)
+    }
+    
+    # get spot associated sets
+    spotsets <- apply(cnt,
+                      1,
+                      getTopNames,
+                      tset,
+                      mass)
+    # compute pvalues
+    pvals <- unlist(lapply(spotsets,
+                           doHyperGeometric,
+                           gset,
+                           tset))
+    # compute enrichement score
+    escore <- -log(pvals) 
+    # correct for eventual zeros
+    escore[is.na(escore)] <- 0.0
+
+    return(escore)
+    
+}

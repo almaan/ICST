@@ -306,7 +306,7 @@ getEnrichementScore <- function(cnt,
     # compute enrichement score
     escore <- -log(pvals) 
     # correct for eventual zeros
-    escore[is.na(escore)] <- 0.0
+    escore[is.na(escore)] <- max(escore,na.rm = T)
 
     return(escore)
     

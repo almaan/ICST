@@ -288,6 +288,61 @@ getCoordinates <- function(spotnames,
     return(crd)
 }
     
+getUniqueIdentifier <- function() {
+    # Generates a time-date based unqiue identifier
+    # Args:
+    #   None
+    # Returns:
+    #   unique tag
+
+    tag <- as.character(Sys.time())
+    tag <- gsub('-|:| ','',as.character(Sys.time()))
+
+    return(tag)
 
 
+}
 
+checkMakeDir <- function(pth) {
+    # Checks if specified directory
+    #   exists and creates it if not
+    #
+    # Args:
+    #   pth - name of directory
+
+    if (!(dir.exists(pth))) {
+        dir.create(pth)
+    }
+}
+
+readSTsection <- function(cpth,
+                          mpth = NULL) {
+
+    # read count matrix
+    ct <- read.csv(cpth,
+                   sep = '\t',
+                   row.names = 1,
+                   header = 1) 
+
+    # use meta data if provided
+    if (!(is.null(mpth))) { 
+        # read meta data 
+        mt <- read.csv(mpth,
+                       sep = '\t',
+                       row.names = 1,
+                       header = 1) 
+        
+        # use spots present in both sets 
+        inter <- intersect(rownames(mt),
+                           rownames(ct))
+        ct <- ct[inter,]
+        mt <- mt[inter,]
+
+        return(list(count_data = ct,
+                     meta_data = mt))
+    } else {
+        return(list(count_data = ct,
+                    meta_data = NULL))
+    }
+}
+ 

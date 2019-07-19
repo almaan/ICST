@@ -1,4 +1,5 @@
 #!/usr/bin/Rscript
+
 sh <- suppressPackageStartupMessages
 sh(library(iC10))
 sh(library(argparse))
@@ -62,7 +63,9 @@ args <- parser$parse_args()
 
 if (!(is.null(args$gene_set))) {
     gene_set <- read.csv(args$gene_set,
-                         sep = '\t')
+                         sep = '\n',
+                         header = 1)
+    gene_set <- as.character(unlist(gene_set))
 } else {
     gene_set <- NULL
 }
@@ -73,13 +76,14 @@ select_for <- args$select_for
 cpth <- args$count_file
 mpth <- args$meta_file
 # set output name
+seltag <- ifelse(is.null(args$select_for),"all",args$select_for)
 ofilename <- paste(gsub(":|-| |","",
                         as.character(Sys.time())),
                         "bulk_analysis",
+                        seltag,
                         sep = '.')
 
 opth <- paste(args$output_dir,ofilename, sep = '/')
-print(opth)
 
 # make sure count and meta data are matched
 cpth <- sort(cpth)
@@ -89,7 +93,9 @@ mpth <- sort(mpth)
 clist <- list()
 mlist <- list()
 plist <- c()
+ilist <- c()
 unigenes <- c()
+num <- 0 
 
 tstart <- as.numeric(Sys.time())
 tend <- tstart
@@ -117,24 +123,34 @@ for (section in 1:length(cpth)) {
     if (!(is.null(select_for))) {
             flog.info(sprintf("Select only spots with annotation : %s",select_for))
             idx <- which(mt$tumor == select_for)
-            ct <- ct[idx,]
-            mt <- mt[idx,]
+
+            # control if spots of selected feature exist
+            if (length(idx) > 0) {
+                ct <- ct[idx,]
+                mt <- mt[idx,]
+                num <- num + 1
+                ilist <- c(ilist,cpth[section])
+            } else {
+               flog.info(sprintf("Sample %s did not have any %s spots", cpth[section], select_for))
+               cpth[section] <- "BAD"
+               next 
+            }
+    } else {
+        num <- num +1
+        ilist <- c(ilist,cpth[section])
     }
     
     # get relative frequencies of counts
     ct <- sweep(ct,1,rowSums(ct),'/')
 
     if (!(is.null(args$gene_set))) {
-            gene_set <- read.csv(args$gene_set,
-                                 sep = '\t')
-    
             cinter <- intersect(gene_set,colnames(ct)) 
             ct <- ct[,cinter]
     }
 
     # store count and meta data
-    clist[[section]] <- ct
-    mlist[[section]] <- mt
+    clist[[num]] <- ct
+    mlist[[num]] <- mt
     
     # store patient information
     plist <- c(plist,as.character(mt$patient[1]))
@@ -145,7 +161,7 @@ for (section in 1:length(cpth)) {
     tend <- as.numeric(Sys.time())
     eta <- (tend - tstart) / section * (length(cpth) - section ) / 60.0 
     flog.info(sprintf(" Loaded section %s | Progress :  %d / %d |  ETA %s min",
-                      cpth[[section]],
+                      cpth[section],
                       section,
                       length(cpth),
                       eta))
@@ -172,10 +188,12 @@ flog.info("Pooling sections from the same patient")
 for (patient in 1:npatients) {
     # get which sections that belong to patient
     idx <- which(unipatient[patient] == plist)
+    flog.info("Pooling >> ")
+    flog.info(ilist[idx])
     # number of sections for patient
     nsections <- length(idx)
     # pool sections
-    for (section in idx ) {
+    for (section in idx) {
        pcnt[patient,colnames(clist[[section]])] <- pcnt[patient,colnames(clist[[section]])] + 
                                                    (colMeans(clist[[section]]) / (nsections))
     }

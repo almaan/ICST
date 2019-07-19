@@ -264,3 +264,30 @@ calcNormFactors <- function (expmat){
 }
 
 
+getCoordinates <- function(spotnames,
+                           delim = 'x') {
+
+    # Get coordinates from a list of spot names
+    #
+    # Args:
+    #   spotnames - list with name of spots
+    #   delim - character separating x and y cooridnate
+    #       in spotnames
+    # Returns:
+    #   (n_spots x 2 ) - matrix of coordinates
+    
+    # helper function for split
+    splstr <- function(x,p) { strsplit(x,'x')[[1]][p]}
+    
+    # get coordinates
+    xcrd <- as.numeric(unlist(sapply(spotnames,splstr,1)))
+    ycrd <- as.numeric(unlist(sapply(spotnames,splstr,2)))
+    # join coordinates 
+    crd <- cbind(xcrd, ycrd)
+
+    return(crd)
+}
+    
+
+
+

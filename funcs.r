@@ -194,4 +194,65 @@ make_g2chr <- function(genes,
     return(mapped)
 }
  
+build_bins <- function(bin.size=1e+6, chrs=NULL, outfile=NULL){
 
+    # build bins for genome hg19
+    # this function create bins by moving binsize window across the genome until meeting
+    # chromosome centromere and telomere. When reach the midpoints and endpoints,
+    # a mid/endpoints-bin.size bin will be add.
+    #
+    # Args:
+    #   bin.size - size of the bins, default: 1e+6
+    #   chrs - chromosome names that need to be binned
+    #          if chrs=NULL, then the entire genome will be bined
+    #   outfile - if NULL, the output will be returned as a dataframe
+    #             otherwise, the output will be written into outfile
+    # Return:
+    #   dataframe with column names (chr, arm, start, end, start_gps, end_gps)
+    #   start_gps and end_gps are the absoulte genomic positions
+
+    library(GenomicRanges)
+
+    # load chromosomal information
+    data(hg19IdeogramCyto,
+         package = "biovizBase")
+    data(hg19Ideogram,
+         package = "biovizBase")
+
+    ordered.chrs <- c("chr1", "chr2", "chr3", "chr4", "chr5",
+                   "chr6", "chr7", "chr8", "chr9", "chr10",
+                   "chr11","chr12","chr13","chr14","chr15",
+                   "chr16","chr17","chr18","chr19","chr20",
+                   "chr21","chr22","chrX", "chrY")
+
+    if (is.null(chrs)){
+        chrs <- ordered.chrs
+    }
+
+    seqlths <- seqlengths(hg19Ideogram)[chrs]
+    midpoints <- sapply(chrs, function(x) max(end(hg19IdeogramCyto[seqnames(hg19IdeogramCyto)==x & grepl("p",hg19IdeogramCyto$name),])))
+
+    all.bins <- c()
+
+    for (c in chrs){
+        p <- seq(0, midpoints[c], by=bin.size)
+        q <- seq(midpoints[c], seqlths[c], by=bin.size)
+
+        bins <- data.frame(chr = rep(c, length(c(p,q))),
+                            arm = c(rep("p",length(p)), rep("q",length(q))),
+                            start = c(p[-length(p)], max(as.numeric(midpoints[c]-bin.size),p[1]), q[-length(q)], max(as.numeric(seqlths[c]-bin.size),q[1])),
+                            end = c(p[-1], as.numeric(midpoints[c]), q[-1], as.numeric(seqlths[c])))
+        bins$start_gps <- gps(chr=c, position=bins$start)
+        bins$end_gps <- gps(chr=c, position=bins$end)
+        all.bins <- rbind(all.bins, bins)
+    }
+
+    if (is.null(outfile)){
+        return(all.bins)
+    }else{
+        write.table(all.bins, file=outfile, sep="\t", quote=FALSE, row.names=FALSE)
+    }
+}
+
+
+# END #

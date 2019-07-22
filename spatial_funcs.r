@@ -18,7 +18,9 @@ getMorisitiaHorn <- function(v1,
 
     # get proportions in each region
     p1 <- v1 / sum(v1)
+    p1[is.na(p1)] <- 0
     p2 <- v2 / sum(v2)
+    p2[is.na(p2)] <- 0
 
     # compute Morisitia-Horn value  
     M <- 2.0 * (p1 %*% p2)
@@ -29,7 +31,7 @@ getMorisitiaHorn <- function(v1,
     }
 
 getMoransIlarge <- function(fmat,
-                          wmat) {
+                            wmat) {
 
     # Get Moran's I for spatial data
     #   Optimized for analysis with multiple features
@@ -72,9 +74,29 @@ getMoransIlarge <- function(fmat,
                     ) 
 
     # compute full Moran's I
-    I = 2.0 * N / W * nomin / denom  
+    I <- 2.0 * N / W * nomin / denom  
+    
+    # get expected value
+    EI <- -1/ (  N - 1) 
+   
+    # stats for variance compuation
+    s1 <- 0.5 * sum( (2*wmat)^2)
+    s2 <- sum((2*rowSums(wmat))^2)
+    s3 <- ( colSums(nfmat^4) / N ) / ( colSums(nfmat^2) / N ) ^2
+    s4 <- (N^2 - 3*N + 3)*s1 - N*s2 + 3*W^2
+    s5 <- (N^2-N)*s1 - 2*N*s2 + 6*W^2
 
-    return(I)
+    VarI <- ( N*s4 - s3*s5 ) /( (N-1) * (N-2) * (N-3) * W^2 ) - EI^2
+    SeI <- sqrt(VarI) / sqrt(N)
+
+    z <- (I - EI ) / SeI 
+    
+    pvals <- 2*pnorm(-abs(z))
+
+    res <- data.frame(I = I,
+                      pvals = pvals)
+
+    return(res)
 
     }   
 

@@ -220,7 +220,7 @@ genomePlot <- function(chr=paste("chr",c(1:22,"X","Y"),sep=""), YLIM = c(-1.5, 1
 # Return:
 #   filtered matrix
 
-filterMatrix <- function(mat,genelist=NULL,minExp=10,minSpot=3){
+filterMatrix <- function(mat,genelist=NULL,minExp=50,minSpot=10,minNonZero=10){
 
     if (!is.null(genelist)){
         mat <- mat[intersect(genelist,colnames(mat)),]
@@ -228,6 +228,9 @@ filterMatrix <- function(mat,genelist=NULL,minExp=10,minSpot=3){
     mat <- mat[,which(colSums(mat)>minExp)]
     percentgenes=apply(mat,2,function(x){sum(x>0)})
     mat=mat[,percentgenes>minSpot]
+
+    keep <- apply(mat, 2, function(x) sum(x!=0)>minNonZero)
+    mat <- mat[,keep]
     return(mat)
 }
 

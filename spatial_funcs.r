@@ -161,5 +161,85 @@ getSpatialWeights <- function(crd,
 
 }
 
+fromMat2List <- function(mat,crd) { 
+    longformat <- c()
+    for (ii in 1:nrow(mat)) {
+       rowv <- sum(mat[ii,])
+       if (rowv > 0) {
+        longformat <- rbind(longformat,
+                            t(replicate(rowv,
+                                        crd[ii,]))) 
+       }
+    }
+
+    return(longformat)
+}
+
+clusterByDensity <- function(longformat,
+                             eps = 2,
+                             minPts = 10) {
     
+    clustered <- dbscan::dbscan(longformat,
+                                eps = eps,
+                                minPts = minPts)
+    idx <- !(duplicated(longformat))
+    crd <- longformat[idx,]
+    lbls <- as.factor(clustered$cluster[idx])
+
+    return(list(labels = lbls, crd = crd ))
+}
+
+clusterByExpression <- function(mat,
+                                maxClusters=10,
+                                criterion = 'BIC'
+                             ) {
+    print(dim(mat))
+    opt_gmm = ClusterR::Optimal_Clusters_GMM(mat,
+                                             max_clusters = maxClusters,
+                                             criterion = criterion, 
+                                             dist_mode = "eucl_dist",
+                                             seed_mode = "random_subset",
+                                             km_iter = 10,
+                                             em_iter = 10,
+                                             var_floor = 1e-10, 
+                                             plot_data = F)
+      
+        ncomp <- which(opt_gmm == min(opt_gmm)) 
+    
+        gmm = ClusterR::GMM(mat,
+                            ncomp,
+                            dist_mode = "eucl_dist",
+                            seed_mode = "random_subset",
+                            km_iter = 10,
+                            em_iter = 10,
+                            verbose = F)        
+        
+        pr = ClusterR::predict_GMM(mat,
+                                   gmm$centroids,
+                                   gmm$covariance_matrices,
+                                   gmm$weights) 
+    
+        return(as.factor(pr$cluster_labels))
+}    
+
+getCorr <- function(cnt) {
+    nc <- ncol(cnt)
+    dmat <- matrix(0,nc,nc)
+    rownames(dmat) = colnames(cnt)
+    colnames(dmat) = colnames(cnt)
+
+    for (xx in 1:(nc-1)) {
+        for (yy in (xx +1):nc) {
+                dmat[xx,yy] <- 1 - cor.test(cnt[,xx],
+                                            cnt[,yy],
+                                            method = 'pearson')$estimate 
+                dmat[yy,xx] <- dmat[xx,yy]
+        }
+    }
+
+    return(dmat)
+}
+
+
+
 

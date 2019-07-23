@@ -372,3 +372,127 @@ build_bins <- function(bin.size=1e+6, chrs=NULL, outfile=NULL){
         write.table(all.bins, file=outfile, sep="\t", quote=FALSE, row.names=FALSE)
     }
 }
+
+
+clusterWithDunn <- function(dmat,
+                            maxClusters = Inf,
+                            intraclust = c("average"),
+                            interclust = c("average")) {
+    
+    # Performs hierchical clustering with
+    #  optimal number of clusters selected
+    #  based on Dunn's Index.
+    #
+    # Args:
+    #   dmat - (n_samples x n_samples) distance matrix
+    #   maxClusters - maximum number of clusters to
+    #       to use in evaluation.
+    #   intraclust - method(s) to use for intracluster
+    #       distance estimation
+    #   interclust - method(s) to use for intercluster
+    #       distance estimation
+    # Returns:
+    #  list with cluster indices, Dunn's index for each
+    #   number of cluster, method used in estimation of
+    #   Dunn's index and the number of clusters used
+    #   in the optimal configuration.
+
+    # upper bound for number of clusters to evaluate
+    nTryCluster <- min(c(maxClusters-1,
+                         nrow(dmat)-2))
+   
+    # obtain hierchical clustering object
+    cres <- cluster::agnes(as.dist(dmat))
+    # vector to hold value of Dunn's Index
+    dvec <- rep(x = 0,
+                times = nTryCluster) 
+
+    # vector to hold values for methods used
+    mvec <- replicate(n = 2,
+                      expr = rep(x = "0",
+                                 times = length(dvec)
+                      )
+                     )
+
+    # evaluate different number of clusters 
+    for (k in 1:length(dvec)) {
+
+        # cluster using  k + 1 clusters
+        pred <- as.integer(cutree(cres,k+1))
+        # evaluate intercluster and intracluster
+        # distances
+
+        calcs <- clv::cls.scatt.data(dmat,
+                                pred,
+                                dist = 'euclidean')
+
+        # compute Dunn's Index from intra/intercluster
+        # distances
+        dunn <- clv::clv.Dunn(calcs,
+                         intracls = intraclust,
+                         intercls = interclust)
+        
+        # get index of best performing clustering
+        # method
+        maxp <-  which(dunn == max(dunn),
+                       arr.ind = TRUE)
+        
+        # pick first combination if equal
+        # value occur
+        if (nrow(maxp) > 1) {
+            maxp <- maxp[1,]
+        }
+        
+        # store results
+        dvec[k] <- as.numeric(dunn[maxp[1],maxp[2]])
+        mvec[k,] <- c(rownames(dunn)[maxp[1]],
+                      colnames(dunn)[maxp[2]])  
+       
+    }
+    
+    # get optimal number of clusters
+    maxidx <- which(dvec == max(dvec)) 
+    ncl <- as.numeric(maxidx + 1)
+    # get cluster labels using optimal number of clusters
+    lbls <- as.integer(cutree(cluster::agnes(as.dist(dmat),
+                                    method = mvec[maxidx,1]),
+                              ncl))
+    
+    return(list(labels = lbls,
+                DunnsI = dvec,
+                methodName = mvec,
+                nclusters = ncl)
+           )
+}
+
+makeDistanceBasedHeatMap <- function(dmat,
+                                     cluster_labels) {
+    
+    # Creates a heatmap with rows and cols grouped by
+    # provided labels. Requires pheatmap to work.
+    #
+    # Args:
+    #   dmat - (n_samples x n_samples) distance matrix to
+    #       visualize.
+    #   cluster_labels - (n_samples) vector with a label for
+    #       each sample
+    # Returns:
+    #   pheatmap object
+    
+    # get order of cluster labels
+    ordr <- order(cluster_labels)
+    
+    # data frame for heatmap annotation
+    annot <- data.frame(cluster = as.factor(cluster_labels[ordr]),
+                        row.names = rownames(dmat)[ordr])
+
+    # create pheatmap object
+    phm <- pheatmap::pheatmap(dmat[ordr,
+                                   ordr],
+                              cluster_rows = F,
+                              cluster_cols = F,
+                              annotation_row = annot,
+                              annotation_col = annot)
+    
+    return(phm)
+}

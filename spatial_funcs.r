@@ -140,23 +140,44 @@ getMoransIsmall <- function(fmat,wmat) {
 
 
 getSpatialWeights <- function(crd,
+                              startpos = NULL,
                               sigma = 1) {
     # Get spatially based weights
     #  uses a RBF kernel to generate weights between
-    #  points.
+    #  points. If multiple sections are used weights
+    #  between sections are set to zero.
+    #
     # Args:
     #   crd - (n_samples x 2 ) matrix of coordinates
+    #   startpos - (n_sections) vector. Use if crd
+    #       contains coordinates of multiple sections
+    #       separated in z-direction. 
     #   sigma - (double) scalar giving the length scale
+    #
     # Returns:
     #   A symmetric (n_samples x n_samples) matrix
     #   with the spatial weights between each pair
     #   of points
     
-    # compute euclidean distance matrix
-    wmat <- dist(crd, diag = T)
-    # use rbf kernel with distance as similaity measure 
-    wmat <- exp(-0.5 * wmat^2 / sigma^2 ) 
-    
+    if (is.null(startpos)) {
+        startpos <- c(1,nrow(crd) + 1)
+    } else {
+        startpos <- c(startpos,nrow(crd) + 1)
+    }
+    wlist <- list()
+
+    for (pos in 1:(length(startpos) - 1)) {
+        # get section indices
+        idx <- c(startpos[pos]:(startpos[pos+1]-1))
+        # use rbf kernel with distance as similaity measure 
+        wlist[[pos]] <- as.matrix(exp(-0.5 * dist(crd[idx],
+                                       diag = T)^2 / 
+                                       sigma^2
+                           )) 
+    }
+
+    wmat <- Matrix::bdiag(wlist) 
+
     return(as.matrix(wmat))
 
 }

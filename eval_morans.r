@@ -83,9 +83,10 @@ wmat <- getSpatialWeights(crd = crd,
                           startpos = dta$startpos,
                           sigma = args$length_scale)
 
+diag(wmat) <- 0.0
 # compute Moran's I for all genes
 flog.info("Computing Moran's I")
-res <- getMoransIlarge(fmat = dta$count_data,
+res <- getMoransIlarge(nfmat = dta$count_data,
                        wmat = wmat)
 
 # set rownames to gene names
@@ -101,7 +102,6 @@ ac_genes <- res[res$I > 0.0 & res$I > qv,]
 ac_genes <- as.character(rownames(ac_genes))
 
 # generate correlation based distance matrix
-flog.info("Computing correlations")
 dmat <- getCorr(dta$count_data[,ac_genes])
 
 # perform hierchical clustering and use

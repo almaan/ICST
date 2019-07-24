@@ -1,5 +1,6 @@
 #!/usr/bin/Rscript
 library(argparse)
+library(futile.logger)
 source("spatial_funcs.r")
 source("funcs.r")
 source("utils.r")
@@ -83,6 +84,7 @@ wmat <- getSpatialWeights(crd = crd,
                           sigma = args$length_scale)
 
 # compute Moran's I for all genes
+flog.info("Computing Moran's I")
 res <- getMoransIlarge(fmat = dta$count_data,
                        wmat = wmat)
 
@@ -99,6 +101,7 @@ ac_genes <- res[res$I > 0.0 & res$I > qv,]
 ac_genes <- as.character(rownames(ac_genes))
 
 # generate correlation based distance matrix
+flog.info("Computing correlations")
 dmat <- getCorr(dta$count_data[,ac_genes])
 
 # perform hierchical clustering and use

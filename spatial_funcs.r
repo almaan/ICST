@@ -30,8 +30,9 @@ getMorisitiaHorn <- function(v1,
 
     }
 
-getMoransIlarge <- function(fmat,
-                            wmat) {
+getMoransIlarge <- function(nfmat,
+                            wmat
+                            ) {
 
     # Get Moran's I for spatial data
     #   Optimized for analysis with multiple features
@@ -49,32 +50,37 @@ getMoransIlarge <- function(fmat,
     # sum of all weights
     W <- sum(wmat)
     # number of samples 
-    N <- nrow(fmat)
+    N <- nrow(nfmat)
     
     # center data
-    nfmat <- sweep(fmat,
+    nfmat <- sweep(nfmat,
                    2,
-                   colMeans(fmat),
+                   colMeans(nfmat),
                    '-') 
 
     # compute denomoniator
     denom <- colSums(nfmat ^ 2 )
     
     # get all combinations of pairs
-    combs <- combn(nrow(fmat),
-                   m = 2)
-
+    #combs <- which( wmat != 0, arr.ind = T) 
     # compute nominator
+    #nomin <- apply(nfmat,
+    #               2,
+    #               function(x) {sum(wmat[cbind(combs[,1],
+    #                                           combs[,2])] * 
+    #                   x[combs[,1]] *
+    #                   x[combs[,2]]) }
+    #                ) 
+
     nomin <- apply(nfmat,
                    2,
-                   function(x) {sum(wmat[cbind(combs[1,],
-                                               combs[2,])] * 
-                       x[combs[1,]] *
-                       x[combs[2,]]) }
-                    ) 
+                   function(x) {
+                       sum(wmat * (x %*% t(x)))
+                               }
+                   )
 
     # compute full Moran's I
-    I <- 2.0 * N / W * nomin / denom  
+    I <- N / W * nomin / denom  
     
     # get expected value
     EI <- -1/ (  N - 1) 
@@ -258,7 +264,7 @@ getCorr <- function(cnt) {
         for (yy in (xx +1):nc) {
                 dmat[xx,yy] <- 1 - cor(cnt[,xx],
                                        cnt[,yy],
-                                       method = 'pearson')$estimate 
+                                       method = 'pearson') 
                 dmat[yy,xx] <- dmat[xx,yy]
         }
     }

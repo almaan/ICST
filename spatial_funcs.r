@@ -287,9 +287,9 @@ computeGeneralG <- function(cmat,w) {
 
     
     # iterate over all genes
-    res <- apply(as.matrix(ct),
+    res <- apply(as.matrix(cmat),
                  2,
-                 computeGeneralG)
+                 fun)
     return(res)
 }
 
@@ -325,7 +325,7 @@ computeGeneralGgrad <- function(cmat,w) {
         }
     
     # iterate over all genes
-    res <- apply(as.matrix(ct),
+    res <- apply(as.matrix(cmat),
                  2,
                  fun)
     return(res)

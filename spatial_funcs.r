@@ -30,6 +30,7 @@ getMorisitiaHorn <- function(v1,
 
     }
 
+
 getMoransIlarge <- function(nfmat,
                             wmat
                             ) {
@@ -60,19 +61,7 @@ getMoransIlarge <- function(nfmat,
 
     # compute denomoniator
     denom <- colSums(nfmat ^ 2 )
-    
-    # get all combinations of pairs
-    #combs <- which( wmat != 0, arr.ind = T) 
-    # compute nominator
-    #nomin <- apply(nfmat,
-    #               2,
-    #               function(x) {sum(wmat[cbind(combs[,1],
-    #                                           combs[,2])] * 
-    #                   x[combs[,1]] *
-    #                   x[combs[,2]]) }
-    #                ) 
-
-    nomin <- apply(nfmat,
+    nomin <- apply(as.matrix(nfmat),
                    2,
                    function(x) {
                        sum(wmat * (x %*% t(x)))
@@ -272,6 +261,72 @@ getCorr <- function(cnt) {
     return(dmat)
 }
 
+computeGeneralG <- function(cmat,w) {
+    # Compute the gradient of the general G
+    #  statistic for all samples
+    # 
+    # Args:
+    #   cmat - (n_samples x n_features) count matrix
+    #   w - (n_samples x n_samples) weight matrix
+    #
+    # Returns:
+    #   n_features vector of General G statistic
+    #   for each feature
+    #
 
+    fun <- function(x) {
+         # helper function
+         # computes general G
+         # for all genes
 
+         xixj <- (x %*% t(x))
 
+         return(sum(w * xixj ) /
+                sum(xixj))
+    }
+
+    
+    # iterate over all genes
+    res <- apply(as.matrix(ct),
+                 2,
+                 computeGeneralG)
+    return(res)
+}
+
+computeGeneralGgrad <- function(cmat,w) {
+    # Compute the gradient of the general G
+    #  statistic for all samples
+    # 
+    # Args:
+    #   cmat - (n_samples x n_features) count matrix
+    #   w - (n_samples x n_samples) weight matrix
+    #
+    # Returns:
+    #   (n_samples x n_features) matrix of partial
+    #   derivatives
+    #
+
+    fun <- function(x) {
+        # helper function
+        # computes gradient w.r.t.
+        # one gene
+
+        xixj <- x %*% t(x)
+        sm <- sum(x)
+        p1 <- sum(xixj)
+        p2 <- sum(w * xixj)
+        p2 <- p2*(sm + x)
+        p3 <- p1^2
+        p1 <- p1*(rowSums(sweep(w,1,x,'*')) )
+        y <- (p1 - p2) / p3
+        y <- ifelse(is.na(y),0,y)
+        return(y)
+
+        }
+    
+    # iterate over all genes
+    res <- apply(as.matrix(ct),
+                 2,
+                 fun)
+    return(res)
+}

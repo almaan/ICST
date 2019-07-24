@@ -82,9 +82,15 @@ plotdf <- data.frame(x = crd[,1],
 
 # plot distribution of each gene
 for (gene in genelist) {
+    if (!(gene %in% colnames(ct))) {
+            print(sprintf(" %s is not present in the data",gene))
+            next
+    }
 
     val <- ct[,gene] 
     plotdf$val <- ct[,gene]
+    q5 <- quantile(val,0.05)
+    q95 <- quantile(val,0.95)
 
     g <- ggplot(plotdf, aes(x = x, y = y)) + 
             geom_point(size = 5, pch = 21, aes(fill = val)) +
@@ -93,8 +99,9 @@ for (gene in genelist) {
                                 space = "Lab",
                                 na.value = "grey50",
                                 guide = "colourbar",
-                                aesthetics = "fill") 
-    
+                                aesthetics = "fill",
+                                limits = c(q5,q95),
+                                oob = scales::squish)
     # set output name 
     oname <- paste(args$out_dir,
                    paste(gene,bname,"viz.png",sep = '.'),

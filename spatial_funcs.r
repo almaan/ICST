@@ -159,13 +159,17 @@ getSpatialWeights <- function(crd,
     #   with the spatial weights between each pair
     #   of points
     
+    # if only one section is used
     if (is.null(startpos)) {
         startpos <- c(1,nrow(crd) + 1)
+    # if multiple sections are used
     } else {
         startpos <- c(startpos,nrow(crd) + 1)
     }
+    # list of section weights
     wlist <- list()
-
+    # compute weights for each section
+    # independently
     for (pos in 1:(length(startpos) - 1)) {
         # get section indices
         idx <- c(startpos[pos]:(startpos[pos+1]-1))
@@ -176,6 +180,7 @@ getSpatialWeights <- function(crd,
                            )) 
     }
 
+    # construct joint weight matrix
     wmat <- Matrix::bdiag(wlist) 
 
     return(as.matrix(wmat))
@@ -251,9 +256,9 @@ getCorr <- function(cnt) {
 
     for (xx in 1:(nc-1)) {
         for (yy in (xx +1):nc) {
-                dmat[xx,yy] <- 1 - cor.test(cnt[,xx],
-                                            cnt[,yy],
-                                            method = 'pearson')$estimate 
+                dmat[xx,yy] <- 1 - cor(cnt[,xx],
+                                       cnt[,yy],
+                                       method = 'pearson')$estimate 
                 dmat[yy,xx] <- dmat[xx,yy]
         }
     }

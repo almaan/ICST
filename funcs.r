@@ -376,7 +376,7 @@ build_bins <- function(bin.size=1e+6, chrs=NULL, outfile=NULL){
 
 clusterWithDunn <- function(dmat,
                             maxClusters = Inf,
-                            intraclust = c("average"),
+                            intraclust = c("complete"),
                             interclust = c("average")) {
     
     # Performs hierchical clustering with
@@ -466,7 +466,8 @@ clusterWithDunn <- function(dmat,
 }
 
 makeDistanceBasedHeatMap <- function(dmat,
-                                     cluster_labels) {
+                                     cluster_labels,
+                                     fontsize = 10) {
     
     # Creates a heatmap with rows and cols grouped by
     # provided labels. Requires pheatmap to work.
@@ -491,8 +492,177 @@ makeDistanceBasedHeatMap <- function(dmat,
                                    ordr],
                               cluster_rows = F,
                               cluster_cols = F,
+                              fontsize = 10,
                               annotation_row = annot,
                               annotation_col = annot)
     
     return(phm)
+}
+
+ReactomePaEnrichment <- function(glist) {
+
+    # Perform enrichment analysis using
+    # the Reactome database
+    #
+    # Args:
+    #   glist - vector with genes to be 
+    #       queried.
+    # Returns:
+    #   list with two elements; "tbl" containing a data
+    #       frame with enrichment results and "visual"
+    #       containing visualizations of the result.
+    #       Can be provided as "method" argument
+    #       to doDbEnrichment
+
+    # convert symbols to entrez id's
+    ezg <- AnnotationDbi::mapIds(org.Hs.eg.db::org.Hs.eg.db,
+                                         keys=glist,
+                                         column="ENTREZID",
+                                         keytype="SYMBOL",
+                                         multiVals="first")
+   
+    # remove genes where conversion failed
+    ezg <- ezg[!(is.na(ezg))]
+    # perform enrichment analysis
+    res <- try( x <- ReactomePA::enrichPathway(gene=ezg,
+                                  pvalueCutoff=0.05,
+                                  readable=T)
+
+                    )
+   
+    # if analysis was successfull store results
+    if(!(class(res) == "try-error")) {
+        # store visualizations
+        viz <- list(emap = ReactomePA::emapplot(x),
+                    bplot = graphics::barplot(x,
+                                              showCategory = Inf),
+                    dotplot = ReactomePA::dotplot(x,
+                                                  showCategory=Inf)
+                    )
+
+        # convert to writeable format 
+        x <- as.data.frame(x)
+        # assign rownames as pathway ID
+        rownames(x) <- x$ID
+        return(list(tbl = x,
+                    visual = viz))
+    } else {
+        return(NULL)
+    }
+}
+
+doDbEnrichment <- function(glist,
+                           label,
+                           method) {
+
+    # Perform Database based enrichment of
+    # gene sets. 
+    #
+    # Args:
+    #   glist - (n_genes, ) vector with genes to query for
+    #       enrichment
+    #   label - (n_genes,) vector indicating cluster
+    #       membership of each gene
+    #   method - function performing an enrichment
+    #       analysis. Should return a list with
+    #       two elements "tbl" and "visual".
+    #       Where tbl holds a data frame of the
+    #       enrichment result and visual any
+    #       eventual visualizations to be saved.
+    #   Returns:
+    #       list of two lists; "tbl" containing 
+    #       data frames with tabulated
+    #       enrichment results and "visual" containing
+    #       eventual visualizations.
+    
+    # get unique labels 
+    unilab <- unique(label)
+    # for storing results
+    rlist <- list(tbl = list(),
+                  visual = list()) 
+
+    # iterate over all clusters
+    for ( num in 1:length(unilab)) {
+        idx <- which(label == unilab[num])
+        # perform enrichment
+        tmp <- method(glist[idx])
+        
+        # store tabulated results
+        rlist$tbl[[num]] <- tmp$tbl 
+        # add cluster identity to result
+        rlist$tbl[[num]]$cluster <- as.character(unilab[num])
+        # make rownames unique 
+        rownames(rlist$tbl[[num]]) <- paste(as.character(unilab[num]),
+                                        rownames(rlist$tbl[[num]]),
+                                        sep='_')
+
+        # store visualization of results
+        rlist$visual[[num]] <- tmp$visual 
+    } 
+
+    return(rlist)
+}
+
+saveEnrichmentResult <- function(result,
+                                 odir,
+                                 tag = NULL) {
+    
+    # Save Enrichment results obtained
+    # from doDbEnrichment. Saves tabulated
+    # results as tsv files and visual representations
+    # as png images.
+    #
+    # Args:
+    #   result - list generated by doDbEnrichment
+    #   odir - output directory
+    #   tag - unique identifier
+   
+    # generate joint rownames
+    rnames <- unlist(sapply(result$tbl,
+                            rownames))
+    
+    # create joint dataframe of all tabulated results
+    result$tbl <- as.data.frame(data.table::rbindlist(result$tbl))
+    rownames(result$tbl) <- rnames
+    # asseble output filename
+    oname <- paste(odir,
+                   paste('enrichment_analysis', 
+                         tag,
+                         'tsv',
+                          sep = '.'),
+                   sep = '/')
+
+    # save results 
+    write.table(result$tbl,
+                oname,
+                sep = '\t',
+                col.names = T,
+                row.names = T,
+                quote = F
+                )
+
+    # save visualizations
+    if (!(is.null(result$visual))) {
+        for ( v in 1:length(result$visual)) {
+            for ( w in 1:length(result$visual[[v]])) {
+                imname <- paste(odir,
+                                paste('enrichment_visualization',
+                                      tag,
+                                      names(result$visual[[v]])[w],
+                                      as.character(v),
+                                      'png',
+                                      sep = '.'
+                                      ),
+                                sep = '/'
+                                )
+
+                 png(imname,
+                     width = 1000,
+                     height  = 2000)
+
+                 print(result$visual[[v]][[w]])
+                 dev.off()
+             }
+        }
+    }
 }

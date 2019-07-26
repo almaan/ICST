@@ -277,7 +277,6 @@ computeGeneralG <- function(cmat,w) {
     fun <- function(x) {
          # helper function
          # computes general G
-         # for all genes
 
          xixj <- (x %*% t(x))
 
@@ -285,11 +284,14 @@ computeGeneralG <- function(cmat,w) {
                 sum(xixj))
     }
 
-    
+    W <- sum(w)
+    n <- nrow(cmat) 
+    expval <- W / (n*(n - 1))
     # iterate over all genes
     res <- apply(as.matrix(cmat),
                  2,
                  fun)
+    res <- res - expval
     return(res)
 }
 

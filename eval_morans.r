@@ -1,6 +1,7 @@
 #!/usr/bin/Rscript
 library(argparse)
 library(futile.logger)
+
 source("spatial_funcs.r")
 source("funcs.r")
 source("utils.r")
@@ -55,7 +56,6 @@ if (!(is.null(args$n_genes))) {
     ngenes <- min(c(ncol(dta$count_data),args$n_genes))
     selidx <- order(colSums(dta$count_data),
                     decreasing = T)[1:ngenes]
-    print(selidx)
 # else use all genes
 } else {
     selidx <- c(1:ncol(dta$count_data))
@@ -86,7 +86,7 @@ wmat <- getSpatialWeights(crd = crd,
 diag(wmat) <- 0.0
 # compute Moran's I for all genes
 flog.info("Computing Moran's I")
-res <- getMoransIlarge(nfmat = dta$count_data,
+res <- getMoransIlarge(nfmat = as.matrix(dta$count_data),
                        wmat = wmat)
 
 # set rownames to gene names
@@ -101,13 +101,16 @@ qv <- as.numeric(quantile(res$I,0.95))
 ac_genes <- res[res$I > 0.0 & res$I > qv,]
 ac_genes <- as.character(rownames(ac_genes))
 
-# generate correlation based distance matrix
+# generate correlation based dissimilarity  matrix
+flog.info("Generate dissimilarity matrix")
 dmat <- getCorr(dta$count_data[,ac_genes])
 
 # perform hierchical clustering and use
 # Dunn's index for finding optimal cluster number
+flog.info("Clustering data and evaluating optimal cluster number")
 dres <- clusterWithDunn(dmat,
                         maxClusters = args$max_clusters)
+
 cluster_labels <- dres$labels
 
 # Save Results -------------------
@@ -132,6 +135,8 @@ table_opth <- paste(base_opth,
                     'tsv',
                     sep = '.') 
 
+flog.info(sprintf("Saving text based results to >> %s",
+                  table_opth))
 # save text format of results
 write.table(data.frame(cluster = cluster_labels),
             table_opth,
@@ -144,5 +149,8 @@ write.table(data.frame(cluster = cluster_labels),
 png(image_opth,
     width = length(ac_genes) * 50 + 300,
     height = length(ac_genes) * 50 + 100)
-print(phm)
 dev.off()
+
+flog.info(sprintf("Saved heatmap of result to >> %s",
+                  image_opth))
+

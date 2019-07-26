@@ -30,6 +30,11 @@ parser$add_argument("-gs","--gene_set",
                     default = NULL,
                     nargs = "+")
 
+parser$add_argument("-an","--show_annot",
+                    default = F,
+                    action = 'store_true')
+
+
 
 
 args <- parser$parse_args()
@@ -79,22 +84,35 @@ crd <- getCoordinates(rownames(ct))
 plotdf <- data.frame(x = crd[,1],
                      y = crd[,2])
     
+if (args$show_annot) {
+    plotdf$annot <- mt$tumor
+    clrm <- scale_colour_manual(values=alpha(c("green",
+                                         "red"),0.7))
+} else {
+    plotdf$annot <- "noanno"
+    clrm <- scale_colour_manual(values="black")
+}
 
 # plot distribution of each gene
 for (gene in genelist) {
+    if (!(gene %in% colnames(ct))) {
+            print(sprintf(" %s is not present in the data",gene))
+            next
+    }
 
     val <- ct[,gene] 
     plotdf$val <- ct[,gene]
 
     g <- ggplot(plotdf, aes(x = x, y = y)) + 
-            geom_point(size = 5, pch = 21, aes(fill = val)) +
+            geom_point(size = 5, pch = 21, aes(fill = val,color = annot)) +
             scale_fill_gradient(low = "#FFFFFF",
                                 high = "#56B1F7",
                                 space = "Lab",
                                 na.value = "grey50",
                                 guide = "colourbar",
-                                aesthetics = "fill") 
-    
+                                aesthetics = "fill",
+                                oob = scales::squish) +
+            clrm
     # set output name 
     oname <- paste(args$out_dir,
                    paste(gene,bname,"viz.png",sep = '.'),

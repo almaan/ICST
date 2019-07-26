@@ -30,8 +30,10 @@ getMorisitiaHorn <- function(v1,
 
     }
 
-getMoransIlarge <- function(fmat,
-                            wmat) {
+
+getMoransIlarge <- function(nfmat,
+                            wmat
+                            ) {
 
     # Get Moran's I for spatial data
     #   Optimized for analysis with multiple features
@@ -49,32 +51,25 @@ getMoransIlarge <- function(fmat,
     # sum of all weights
     W <- sum(wmat)
     # number of samples 
-    N <- nrow(fmat)
+    N <- nrow(nfmat)
     
     # center data
-    nfmat <- sweep(fmat,
+    nfmat <- sweep(nfmat,
                    2,
-                   colMeans(fmat),
+                   colMeans(nfmat),
                    '-') 
 
     # compute denomoniator
     denom <- colSums(nfmat ^ 2 )
-    
-    # get all combinations of pairs
-    combs <- combn(nrow(fmat),
-                   m = 2)
-
-    # compute nominator
-    nomin <- apply(nfmat,
+    nomin <- apply(as.matrix(nfmat),
                    2,
-                   function(x) {sum(wmat[cbind(combs[1,],
-                                               combs[2,])] * 
-                       x[combs[1,]] *
-                       x[combs[2,]]) }
-                    ) 
+                   function(x) {
+                       sum(wmat * (x %*% t(x)))
+                               }
+                   )
 
     # compute full Moran's I
-    I <- 2.0 * N / W * nomin / denom  
+    I <- N / W * nomin / denom  
     
     # get expected value
     EI <- -1/ (  N - 1) 
@@ -140,26 +135,200 @@ getMoransIsmall <- function(fmat,wmat) {
 
 
 getSpatialWeights <- function(crd,
+                              startpos = NULL,
                               sigma = 1) {
     # Get spatially based weights
     #  uses a RBF kernel to generate weights between
-    #  points.
+    #  points. If multiple sections are used weights
+    #  between sections are set to zero.
+    #
     # Args:
     #   crd - (n_samples x 2 ) matrix of coordinates
+    #   startpos - (n_sections) vector. Use if crd
+    #       contains coordinates of multiple sections
+    #       separated in z-direction. 
     #   sigma - (double) scalar giving the length scale
+    #
     # Returns:
     #   A symmetric (n_samples x n_samples) matrix
     #   with the spatial weights between each pair
     #   of points
     
-    # compute euclidean distance matrix
-    wmat <- dist(crd, diag = T)
-    # use rbf kernel with distance as similaity measure 
-    wmat <- exp(-0.5 * wmat^2 / sigma^2 ) 
-    
+    # if only one section is used
+    if (is.null(startpos)) {
+        startpos <- c(1,nrow(crd) + 1)
+    # if multiple sections are used
+    } else {
+        startpos <- c(startpos,nrow(crd) + 1)
+    }
+    # list of section weights
+    wlist <- list()
+    # compute weights for each section
+    # independently
+    for (pos in 1:(length(startpos) - 1)) {
+        # get section indices
+        idx <- c(startpos[pos]:(startpos[pos+1]-1))
+        # use rbf kernel with distance as similaity measure 
+        wlist[[pos]] <- as.matrix(exp(-0.5 * dist(crd[idx],
+                                       diag = T)^2 / 
+                                       sigma^2
+                           )) 
+    }
+
+    # construct joint weight matrix
+    wmat <- Matrix::bdiag(wlist) 
+
     return(as.matrix(wmat))
 
 }
 
-    
+fromMat2List <- function(mat,crd) { 
+    longformat <- c()
+    for (ii in 1:nrow(mat)) {
+       rowv <- sum(mat[ii,])
+       if (rowv > 0) {
+        longformat <- rbind(longformat,
+                            t(replicate(rowv,
+                                        crd[ii,]))) 
+       }
+    }
 
+    return(longformat)
+}
+
+clusterByDensity <- function(longformat,
+                             eps = 2,
+                             minPts = 10) {
+    
+    clustered <- dbscan::dbscan(longformat,
+                                eps = eps,
+                                minPts = minPts)
+    idx <- !(duplicated(longformat))
+    crd <- longformat[idx,]
+    lbls <- as.factor(clustered$cluster[idx])
+
+    return(list(labels = lbls, crd = crd ))
+}
+
+clusterByExpression <- function(mat,
+                                maxClusters=10,
+                                criterion = 'BIC'
+                             ) {
+    print(dim(mat))
+    opt_gmm = ClusterR::Optimal_Clusters_GMM(mat,
+                                             max_clusters = maxClusters,
+                                             criterion = criterion, 
+                                             dist_mode = "eucl_dist",
+                                             seed_mode = "random_subset",
+                                             km_iter = 10,
+                                             em_iter = 10,
+                                             var_floor = 1e-10, 
+                                             plot_data = F)
+      
+        ncomp <- which(opt_gmm == min(opt_gmm)) 
+    
+        gmm = ClusterR::GMM(mat,
+                            ncomp,
+                            dist_mode = "eucl_dist",
+                            seed_mode = "random_subset",
+                            km_iter = 10,
+                            em_iter = 10,
+                            verbose = F)        
+        
+        pr = ClusterR::predict_GMM(mat,
+                                   gmm$centroids,
+                                   gmm$covariance_matrices,
+                                   gmm$weights) 
+    
+        return(as.factor(pr$cluster_labels))
+}    
+
+getCorr <- function(cnt) {
+    nc <- ncol(cnt)
+    dmat <- matrix(0,nc,nc)
+    rownames(dmat) = colnames(cnt)
+    colnames(dmat) = colnames(cnt)
+
+    for (xx in 1:(nc-1)) {
+        for (yy in (xx +1):nc) {
+                dmat[xx,yy] <- 1 - cor(cnt[,xx],
+                                       cnt[,yy],
+                                       method = 'pearson') 
+                dmat[yy,xx] <- dmat[xx,yy]
+        }
+    }
+
+    return(dmat)
+}
+
+computeGeneralG <- function(cmat,w) {
+    # Compute the gradient of the general G
+    #  statistic for all samples
+    # 
+    # Args:
+    #   cmat - (n_samples x n_features) count matrix
+    #   w - (n_samples x n_samples) weight matrix
+    #
+    # Returns:
+    #   n_features vector of General G statistic
+    #   for each feature
+    #
+
+    fun <- function(x) {
+         # helper function
+         # computes general G
+
+         xixj <- (x %*% t(x))
+
+         return(sum(w * xixj ) /
+                sum(xixj))
+    }
+
+    W <- sum(w)
+    n <- nrow(cmat) 
+    expval <- W / (n*(n - 1))
+    # iterate over all genes
+    res <- apply(as.matrix(cmat),
+                 2,
+                 fun)
+    res <- res - expval
+    return(res)
+}
+
+computeGeneralGgrad <- function(cmat,w) {
+    # Compute the gradient of the general G
+    #  statistic for all samples
+    # 
+    # Args:
+    #   cmat - (n_samples x n_features) count matrix
+    #   w - (n_samples x n_samples) weight matrix
+    #
+    # Returns:
+    #   (n_samples x n_features) matrix of partial
+    #   derivatives
+    #
+
+    fun <- function(x) {
+        # helper function
+        # computes gradient w.r.t.
+        # one gene
+
+        xixj <- x %*% t(x)
+        sm <- sum(x)
+        p1 <- sum(xixj)
+        p2 <- sum(w * xixj)
+        p2 <- p2*(sm + x)
+        p3 <- p1^2
+        p1 <- p1*(rowSums(sweep(w,1,x,'*')) )
+        y <- (p1 - p2) / p3
+        y <- ifelse(is.na(y),0,y)
+        return(y)
+
+        }
+    
+    # iterate over all genes
+    res <- apply(as.matrix(cmat),
+                 2,
+                 fun)
+    return(res)
+}

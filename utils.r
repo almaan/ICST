@@ -11,7 +11,9 @@ load_multiple <- function(cpths,
     #   mpths : vector[character] - vector of full paths to meta files
     # Returns:
     #  list with the joint count matrix (count_data) and 
-    #   joint meta file (meta_data)
+    #   joint meta file (meta_data). Also includes
+    #   start position of each section and section
+    #   labels.
 
 
     # unlist
@@ -23,6 +25,7 @@ load_multiple <- function(cpths,
     mlist <- list()
     index <- c(0)
     rnames <- c()
+    znames <- c()
     genes <- c()
 
     for (sample in 1:length(cpths)) {
@@ -58,6 +61,7 @@ load_multiple <- function(cpths,
         # add unique rownames for joint matrix
         rnames <- c(rnames,paste(sample,rownames(ct),sep = '_'))
         # modify set of observed genes
+        znames <- c(znames, rep(x = sample, nrow(ct)))
         genes <- union(genes,colnames(ct))
 
     }
@@ -77,11 +81,14 @@ load_multiple <- function(cpths,
         cjoint[(index[pos]+1):(index[pos+1]),colnames(clist[[pos]])] <- clist[[pos]]  
         mjoint[(index[pos]+1):(index[pos+1]),] <- mlist[[pos]]
     }
-  
+    
+    startpos <- index[-length(index)] + 1
+
     # list of joined marices
     joint <- list(count_data = cjoint,
                   meta_data = mjoint,
-                  cumsum = cumsum)
+                  startpos = startpos,
+                  identifier = znames)
 
     return(joint)
 
@@ -332,6 +339,7 @@ readSTsection <- function(cpth,
                        row.names = 1,
                        header = 1) 
         
+        mt[] <- lapply(mt,as.character)
         # use spots present in both sets 
         inter <- intersect(rownames(mt),
                            rownames(ct))

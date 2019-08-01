@@ -666,3 +666,132 @@ saveEnrichmentResult <- function(result,
         }
     }
 }
+
+getClassAccuracy <- function(pred,
+                             true,
+                             labs) {
+acc <- c()
+unilabs <- unique(labs)
+
+for (lab in unilabs) {
+    idx <- which(labs == lab)
+    acc <- c(acc,
+             sum(pred[idx] == true[idx]) /
+             length(idx)
+            )
+    }
+
+    names(acc) <- ifelse(unilabs == 1,
+                         'tumor',
+                         'non')
+    return(acc)
+
+}
+
+makeSets <- function(nsamples,
+                     ptrain = 0.8,
+                     labs = NULL,
+                     balance = F) {
+
+    idx <- seq(1:nsamples)
+
+    if (balance) {
+        minlen <- min(as.numeric(table(labs)))
+    }
+
+    if (is.null(labs)) {
+
+        idx <- sample(idx)
+        sep <- floor(length(idx)*0.8)
+        train_idx <- idx[1:sep]
+        test_idx <- idx[(sep + 1):length(idx)]
+
+    } else {
+
+        train_idx <- c()
+        test_idx <- c()
+
+        for (lab in unique(labs)) {
+            lidx <- sample(idx[labs == lab])
+
+            if (balance) {
+                lidx <- lidx[1:minlen]
+            }
+            sep <- floor(length(lidx)*0.8)
+
+            train_idx <- c(train_idx,
+                           lidx[1:sep]
+            )
+
+            test_idx <- c(test_idx,
+                          lidx[(sep+1):length(lidx)]
+                          )
+
+        }
+    }
+
+    return(list(train_idx = train_idx,
+                test_idx = test_idx))
+
+}
+
+
+doLogisiticRegression <- function(dta,
+                                  ptrain = 0.8,
+                                  tumor_label = 'tumor'
+                                  ) {
+
+    y <- dta$meta_data$tumor
+
+    y <- ifelse(y == tumor_label,
+                1,
+                0)
+    
+    sets <- makeSets(nrow(dta$count_data),
+                          ptrain = 0.8,
+                          labs = y,
+                          balance =F
+                          )
+    
+    
+    cv_lasso <- cv.glmnet(x = dta$count_data[sets$train_idx,],
+                          y = y[sets$train_idx],
+                          alpha = 1,
+                          family = 'binomial'
+                          )
+    
+    
+    model <- glmnet(x = dta$count_data[sets$train_idx,],
+                    y = y[sets$train_idx],
+                    alpha = 1,
+                    lambda = cv_lasso$lambda.1se,
+                    family = 'binomial'
+                    )
+    
+    betas <- data.frame(gene = colnames(dta$count_data),
+                        val = as.numeric(as.numeric(coef(model)))[-1]
+                        )
+    
+    betas <- betas[order(betas$val,decreasing = T),]
+
+    probs <- predict(model,
+                     newx = dta$count_data[sets$test_idx,],
+                     type = 'response')
+    
+    
+    
+    adj_probs <- ifelse(probs > 0.5,
+                        1,
+                        0
+                        )
+    
+    acc <- getClassAccuracy(adj_probs,
+                            y[sets$test_idx],
+                            y[sets$test_idx]
+                            )
+
+    return(list(betas = betas,
+                acc = acc
+                )
+          )
+}

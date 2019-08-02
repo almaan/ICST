@@ -56,7 +56,7 @@ if (is.null(args$count_file)){
     mt <- data$meta_data
     bname <- gsub("count_data\\-|\\.tsv",
                       "",
-                      basename(args$count_data))
+                      basename(args$count_file))
  
 }
 

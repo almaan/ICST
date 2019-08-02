@@ -736,56 +736,67 @@ makeSets <- function(nsamples,
 }
 
 
-doLogisiticRegression <- function(dta,
+doLogisiticRegression <- function(count_data,
+                                  meta_data,
                                   ptrain = 0.8,
-                                  tumor_label = 'tumor'
+                                  tumor_label = 'tumor',
+                                  balance = F,
+                                  pos_only = F
                                   ) {
 
-    y <- dta$meta_data$tumor
+    y <- meta_data$tumor
 
     y <- ifelse(y == tumor_label,
                 1,
                 0)
     
-    sets <- makeSets(nrow(dta$count_data),
+    sets <- makeSets(nrow(count_data),
                           ptrain = 0.8,
                           labs = y,
-                          balance =F
+                          balance = balance
                           )
     
     
-    cv_lasso <- cv.glmnet(x = dta$count_data[sets$train_idx,],
-                          y = y[sets$train_idx],
-                          alpha = 1,
-                          family = 'binomial'
-                          )
+    cv_lasso <- glmnet::cv.glmnet(x = count_data[sets$train_idx,],
+                                  y = y[sets$train_idx],
+                                  alpha = 1,
+                                  family = 'binomial'
+                                  )
     
     
-    model <- glmnet(x = dta$count_data[sets$train_idx,],
-                    y = y[sets$train_idx],
-                    alpha = 1,
-                    lambda = cv_lasso$lambda.1se,
-                    family = 'binomial'
-                    )
+    model <- glmnet::glmnet(x = count_data[sets$train_idx,],
+                            y = y[sets$train_idx],
+                            alpha = 1,
+                            lambda = cv_lasso$lambda.1se,
+                            family = 'binomial'
+                            )
     
-    betas <- data.frame(gene = colnames(dta$count_data),
-                        val = as.numeric(as.numeric(coef(model)))[-1]
+    betas <- data.frame(val = as.numeric(coef(model))[-1],
+                        genes = colnames(count_data)
                         )
     
     betas <- betas[order(betas$val,decreasing = T),]
 
-    probs <- predict(model,
-                     newx = dta$count_data[sets$test_idx,],
-                     type = 'response')
+    if (pos_only) {
+        pospos <- betas$val > 0
+
+        if (sum(pospos) > 0) {
+            betas <- betas[pospos,]
+        } else {
+            betas <- NULL
+        }
+    }
+
+    probs <- stats::predict(model,
+                           newx = count_data[sets$test_idx,],
+                           type = 'response')
     
+    probs <- ifelse(probs > 0.5,
+                    yes = 1,
+                    no = 0
+                    )
     
-    
-    adj_probs <- ifelse(probs > 0.5,
-                        1,
-                        0
-                        )
-    
-    acc <- getClassAccuracy(adj_probs,
+    acc <- getClassAccuracy(probs,
                             y[sets$test_idx],
                             y[sets$test_idx]
                             )
@@ -794,4 +805,36 @@ doLogisiticRegression <- function(dta,
                 acc = acc
                 )
           )
+}
+
+doPatientWiseLogisticRegression <- function(cpths,
+                                            mpths) {
+        
+    dta <- load_multiple(cpths,
+                         mpths)
+    
+    dta$count_data <- as.matrix(dta$count_data)
+    dta$count_data <- sweep(dta$count_data,
+                            1,
+                            rowSums(dta$count_data),
+                            '/'
+                            )
+    
+    dta$count_data[is.na(dta$count_data)] <- 0.0
+
+    unipats <- unique(dta$meta_data$patient)
+    genesets <- list()
+
+    for (pat in unipats) {
+
+        idx <- which(dta$meta_data$patient == pat)
+        res <- doLogisiticRegression(dta$count_data[idx,],
+                                     dta$meta_data[idx,],
+                                     pos_only = T
+                                     )
+
+        genesets[[pat]] <- res$betas
+    }
+
+    return(genesets)
 }

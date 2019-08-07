@@ -1,6 +1,9 @@
 #!/usr/bin/Rscript
 library(argparse)
 library(futile.logger)
+library(future.apply)
+plan(multiprocess, workers = 4) ## Parallelize using four cores
+
 
 source("spatial_funcs.r")
 source("funcs.r")
@@ -50,6 +53,8 @@ checkMakeDir(args$odir)
 dta <- load_multiple(cpth = args$count_file,
                      mpth = args$meta_file)
 
+flog.info("Loaded data")
+
 # select top "ngenes" expressed genes if
 # specified by user. Mainly for evaluation.
 if (!(is.null(args$n_genes))) {
@@ -78,16 +83,33 @@ crd <- getCoordinates(gsub(pattern = '[0-9]*_',
                            replace = '',
                            x = rownames(dta$count_data)))
 
+flog.info("Computed Weights Matrix")
 # generate weights matrix
 wmat <- getSpatialWeights(crd = crd,
                           startpos = dta$startpos,
                           sigma = args$length_scale)
 
 diag(wmat) <- 0.0
+
 # compute Moran's I for all genes
+dta$count_data <- sweep(dta$count_data,
+                        2,
+                        colMeans(dta$count_data),
+                        '-'
+                        )
+
+wmat <- sweep(wmat,
+              1,
+              rowSums(wmat),
+              '/'
+              )
+
 flog.info("Computing Moran's I")
 res <- getMoransIlarge(nfmat = as.matrix(dta$count_data),
-                       wmat = wmat)
+                       wmat = as.matrix(wmat))
+
+#res <- getMoransIv2(nfmat = as.matrix(dta$count_data),
+#                    wmat = as.matrix(wmat))
 
 # set rownames to gene names
 rownames(res) <- colnames(dta$count_data,)
@@ -95,10 +117,12 @@ rownames(res) <- colnames(dta$count_data,)
 res <- res[!(is.na(res$I)),]
 
 # get values of top quantile
-qv <- as.numeric(quantile(res$I,0.95))
+#qv <- as.numeric(quantile(res$I,0.95))
 
 # select only top genes with positive autocorrelation
-ac_genes <- res[res$I > 0.0 & res$I > qv,]
+#ac_genes <- res[res$I > 0.0 & res$I > qv,]
+#ac_genes <- as.character(rownames(ac_genes))
+ac_genes <- res[res$I > 0.0 & res$p.adjust < 0.05,]
 ac_genes <- as.character(rownames(ac_genes))
 
 # generate correlation based dissimilarity  matrix

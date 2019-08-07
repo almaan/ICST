@@ -47,29 +47,23 @@ getMoransIlarge <- function(nfmat,
     #   wmat - (n_sample x n_sample) weights matrix
     # Returns:
     #   Moran's I for each feature
-
+    tstart <- Sys.time()
     # sum of all weights
     W <- sum(wmat)
     # number of samples 
     N <- nrow(nfmat)
-    
-    # center data
-    nfmat <- sweep(nfmat,
-                   2,
-                   colMeans(nfmat),
-                   '-') 
 
     # compute denomoniator
-    denom <- colSums(nfmat ^ 2 )
-    nomin <- apply(as.matrix(nfmat),
-                   2,
-                   function(x) {
-                       sum(wmat * (x %*% t(x)))
-                               }
-                   )
+    denom <- colSums(nfmat^2)
+    nomin <- future.apply::future_apply(as.matrix(nfmat),
+                                        2,
+                                        function(x) {
+                                            sum(wmat * (x %o% x))
+                                                    }
+                                        )
 
     # compute full Moran's I
-    I <- N / W * nomin / denom  
+    I <- (N / W) * (nomin / denom)
     
     # get expected value
     EI <- -1/ (  N - 1) 
@@ -77,20 +71,37 @@ getMoransIlarge <- function(nfmat,
     # stats for variance compuation
     s1 <- 0.5 * sum( (2*wmat)^2)
     s2 <- sum((2*rowSums(wmat))^2)
+
     s3 <- ( colSums(nfmat^4) / N ) / ( colSums(nfmat^2) / N ) ^2
-    s4 <- (N^2 - 3*N + 3)*s1 - N*s2 + 3*W^2
-    s5 <- (N^2-N)*s1 - 2*N*s2 + 6*W^2
+    s4 <- (N^2 - 3*N + 3)*s1 - N*s2 + 3*(W^2)
+    s5 <- (N^2-N)*s1 - 2*N*s2 + 6*(W^2)
 
-    VarI <- ( N*s4 - s3*s5 ) /( (N-1) * (N-2) * (N-3) * W^2 ) - EI^2
-    SeI <- sqrt(VarI) / sqrt(N)
+    VarI <- ( N*s4 - s3*s5 ) / ( (N-1) * (N-2) * (N-3) * W^2 ) - EI^2
+    SeI <- sqrt(VarI) 
 
-    z <- (I - EI ) / SeI 
+    #z <- (I - EI ) / SeI 
+    pvals <- pnorm(I,
+                   mean = EI,
+                   sd = SeI) 
+
+    pvals <- sapply(pvals,
+                    function(x) {
+                        ifelse(x > 0,
+                               1-x,
+                               x)
+                    }
+                    )
+    pvals <- 2*pvals
     
-    pvals <- 2*pnorm(-abs(z))
+    #pvals <- 2*pnorm(-abs(z))
+    padj <- p.adjust(pvals, method = 'BH')
 
     res <- data.frame(I = I,
-                      pvals = pvals)
+                      sd = SeI,
+                      p.value = pvals,
+                      p.adjust = padj)
 
+    print(Sys.time() - tstart)
     return(res)
 
     }   
@@ -129,8 +140,34 @@ getMoransIsmall <- function(fmat,wmat) {
         return(I)
     }
     
-
+    tstart <- Sys.time()
     return(apply(df, 2, fun, wmat))
+    print(Sys.time()-tstart)
+}
+
+getMoransIv2 <- function(nfmat,
+                         wmat) {
+    tstart <- Sys.time() 
+    res <- future.apply::future_apply(nfmat,
+                                  2,
+                                  ape::Moran.I,
+                                  weight = wmat,
+                                  alternative = 'two.sided'
+                                  )
+
+    res <- as.data.frame(do.call(rbind,
+                                 res))
+    res[] <- apply(res,
+                   2,
+                   as.numeric
+                   )
+
+    res$p.adjust <- p.adjust(res$p.value,
+                             method = 'BH')
+    colnames(res)[1] <- "I"
+    print(Sys.time() - tstart)
+    return(res)
+
 }
 
 
@@ -258,6 +295,14 @@ getCorr <- function(cnt) {
         }
     }
 
+    return(dmat)
+}
+
+getCorr <- function(cnt) {
+    nc <- ncol(cnt)
+    dmat <- 1 - cor(as.matrix(cnt))
+    colnames(dmat)  <- colnames(cnt)
+    rownames(dmat) <- colnames(cnt)
     return(dmat)
 }
 

@@ -2,7 +2,6 @@
 library(argparse)
 library(futile.logger)
 library(future.apply)
-plan(multiprocess, workers = 4) ## Parallelize using four cores
 
 
 source("spatial_funcs.r")
@@ -36,6 +35,11 @@ parser$add_argument("-mc","--max_clusters",
                     type = "integer",
                     default = NULL)
 
+parser$add_argument("-nw","--n_workers",
+                    type = "integer",
+                    default = 1)
+
+
 args <- parser$parse_args()
 
 # Session Information ------------
@@ -46,6 +50,12 @@ tag <- getUniqueIdentifier()
 # exists. Create it if not
 
 checkMakeDir(args$odir)
+# Set number of workers
+plan(multiprocess,
+     workers = args$n_workers) ## Parallelize using four cores
+
+flog.info(sprintf("Using %d workers"),args$n_workers)
+
 
 # Load Data ----------------
 
@@ -120,8 +130,6 @@ res <- res[!(is.na(res$I)),]
 #qv <- as.numeric(quantile(res$I,0.95))
 
 # select only top genes with positive autocorrelation
-#ac_genes <- res[res$I > 0.0 & res$I > qv,]
-#ac_genes <- as.character(rownames(ac_genes))
 ac_genes <- res[res$I > 0.0 & res$p.adjust < 0.05,]
 ac_genes <- as.character(rownames(ac_genes))
 

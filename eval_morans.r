@@ -51,6 +51,7 @@ tag <- getUniqueIdentifier()
 
 checkMakeDir(args$odir)
 # Set number of workers
+options(future.globals.maxSize= 10000*1024^2)
 plan(multiprocess,
      workers = args$n_workers) 
 
@@ -181,6 +182,9 @@ write.table(data.frame(cluster = cluster_labels),
 png(image_opth,
     width = length(ac_genes) * 50 + 300,
     height = length(ac_genes) * 50 + 100)
+
+print(phm)
+
 dev.off()
 
 flog.info(sprintf("Saved heatmap of result to >> %s",

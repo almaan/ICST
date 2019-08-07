@@ -522,20 +522,21 @@ enrichREnrihement <-function(glist,
 
     if (is.null(data_bases)) {
         data_bases <- c("GO_Biological_Process_2018",
-                         "KEGG_2019_Human")
+                        "KEGG_2019_Human")
     }
 
-    pres <- enrichr::enrichr(glist,
+    pres <- enrichR::enrichr(glist,
                             data_bases)
    
     tmp <- list()
 
     for (db in data_bases) {
 
-        if (nrow(pres[db] > 0)) {
-            tmp[[db]] <- pres[db][,c("Term",
+        if (nrow(pres[[db]]) > 0) {
+
+            tmp[[db]] <- pres[[db]][,c("Term",
                                     "Overlap",
-                                    "Adjusted.P.Value",
+                                    "Adjusted.P.value",
                                     "Genes")
                                  ]
             colnames(tmp[[db]]) <- c("ID",

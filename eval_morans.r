@@ -54,7 +54,7 @@ checkMakeDir(args$odir)
 plan(multiprocess,
      workers = args$n_workers) 
 
-flog.info(sprintf("Using %d workers"),args$n_workers)
+flog.info(sprintf("Using %d workers",args$n_workers))
 
 
 # Load Data ----------------

@@ -194,6 +194,44 @@ make_g2chr <- function(genes,
     return(mapped)
 }
  
+doHyperGeometric <- function(sptset,
+                             gset,
+                             tset) {
+
+        # Conduct a hyper-geometric test
+        # to obtain pvalue of intersection size
+        # between two sets
+        #
+        # Args:
+        #   sptset - vector with gene names
+        #       associated to a spot. Top genes,
+        #   gset - vector with set of names
+        #           for genes of interest
+        #   tset - vector with set of names
+        #           for all observed genes
+        # Returns:
+        #   Pvalue of having an intersection 
+        #       equal or larger than the
+        #       observed value
+        
+        # get intersection of set of intereset
+        # and spot associated set
+        inter <- intersect(sptset,gset)
+        # get cardinality of full set 
+        N <- length(tset)
+        # cardinality of spotset 
+        m <- length(sptset)
+        # cardinality of complement to spotset
+        n <- N - m 
+        # cardinality of set of intereset
+        k <- length(gset)
+        # cardinality of intersection
+        x <- length(inter) 
+        # do hypergeomatric test
+        p <- phyper(x-1, m,n,k, lower.tail = F, log.p = F) 
+        
+        return (p)
+    }
 
 getEnrichementScore <- function(cnt,
                                 gset,
@@ -247,46 +285,6 @@ getEnrichementScore <- function(cnt,
     
     }
     
-    
-    
-    doHyperGeometric <- function(sptset,
-                                 gset,
-                                 tset) {
-
-        # Conduct a hyper-geometric test
-        # to obtain pvalue of intersection size
-        # between two sets
-        #
-        # Args:
-        #   sptset - vector with gene names
-        #       associated to a spot. Top genes,
-        #   gset - vector with set of names
-        #           for genes of interest
-        #   tset - vector with set of names
-        #           for all observed genes
-        # Returns:
-        #   Pvalue of having an intersection 
-        #       equal or larger than the
-        #       observed value
-        
-        # get intersection of set of intereset
-        # and spot associated set
-        inter <- intersect(sptset,gset)
-        # get cardinality of full set 
-        N <- length(tset)
-        # cardinality of spotset 
-        m <- length(sptset)
-        # cardinality of complement to spotset
-        n <- N - m 
-        # cardinality of set of intereset
-        k <- length(gset)
-        # cardinality of intersection
-        x <- length(inter) 
-        # do hypergeomatric test
-        p <- phyper(x-1, m,n,k, lower.tail = F, log.p = F) 
-        
-        return (p)
-    }
     
     if (is.null(tset)) {
         tset <- colnames(cnt)
@@ -499,6 +497,68 @@ makeDistanceBasedHeatMap <- function(dmat,
     return(phm)
 }
 
+enrichREnrihement <-function(glist,
+                             data_bases = NULL) {
+
+    # Perform enrichment analysis using
+    # enrichR package 
+    #
+    # Args:
+    #   glist - vector with genes to be 
+    #       queried.
+    #   data_bases - vector of databases
+    #       to be used by enrichR. Use the
+    #       "listEnrichrDbs" function of enrichR
+    #       to see available databases.
+    # Returns:
+    #   list with two elements; "tbl" containing a data
+    #       frame with enrichment results and "visual"
+    #       containing visualizations of the result.
+    #       At the moment the visualization is a
+    #       NULL object.
+    #       Can be passed as "method" argument
+    #       to doDbEnrichment
+    
+
+    if (is.null(data_bases)) {
+        data_bases <- c("GO_Biological_Process_2018",
+                         "KEGG_2019_Human")
+    }
+
+    pres <- enrichr::enrichr(glist,
+                            data_bases)
+   
+    tmp <- list()
+
+    for (db in data_bases) {
+
+        if (nrow(pres[db] > 0)) {
+            tmp[[db]] <- pres[db][,c("Term",
+                                    "Overlap",
+                                    "Adjusted.P.Value",
+                                    "Genes")
+                                 ]
+            colnames(tmp[[db]]) <- c("ID",
+                                     "GeneRatio",
+                                     "p.adjust",
+                                     "geneID"
+                                     )
+            
+            rownames(tmp[[db]]) <- paste(db,
+                                         seq(1,nrow(tmp[[db]])),
+                                         sep = '_'
+                                         )
+        }    
+    }
+
+    res <- list(tbl = as.data.frame(data.table::rbindlist(tmp)),
+                visual = NULL
+                )
+
+    return(res)
+
+}
+
 ReactomePaEnrichment <- function(glist) {
 
     # Perform enrichment analysis using
@@ -529,9 +589,8 @@ ReactomePaEnrichment <- function(glist) {
                                   readable=T)
 
                     )
-   
     # if analysis was successfull store results
-    if(!(class(res) == "try-error")) {
+    if(!(class(res) == "try-error") & any(x@result$p.adjust < 0.05)) {
         # store visualizations
         viz <- list(emap = ReactomePA::emapplot(x),
                     bplot = graphics::barplot(x,
@@ -586,18 +645,20 @@ doDbEnrichment <- function(glist,
         idx <- which(label == unilab[num])
         # perform enrichment
         tmp <- method(glist[idx])
-        
-        # store tabulated results
-        rlist$tbl[[num]] <- tmp$tbl 
-        # add cluster identity to result
-        rlist$tbl[[num]]$cluster <- as.character(unilab[num])
-        # make rownames unique 
-        rownames(rlist$tbl[[num]]) <- paste(as.character(unilab[num]),
-                                        rownames(rlist$tbl[[num]]),
-                                        sep='_')
+      
+        if (!(is.null(tmp))) {
+            # store tabulated results
+            rlist$tbl[[num]] <- tmp$tbl 
+            # add cluster identity to result
+            rlist$tbl[[num]]$cluster <- as.character(unilab[num])
+            # make rownames unique 
+            rownames(rlist$tbl[[num]]) <- paste(as.character(unilab[num]),
+                                            rownames(rlist$tbl[[num]]),
+                                            sep='_')
 
-        # store visualization of results
-        rlist$visual[[num]] <- tmp$visual 
+            # store visualization of results
+            rlist$visual[[num]] <- tmp$visual 
+        }
     } 
 
     return(rlist)
@@ -772,7 +833,7 @@ doLogisiticRegression <- function(count_data,
                             )
     
     betas <- data.frame(val = as.numeric(coef(model))[-1],
-                        genes = colnames(count_data)
+                        genes = as.character(colnames(count_data))
                         )
     
     betas <- betas[order(betas$val,decreasing = T),]
@@ -807,34 +868,35 @@ doLogisiticRegression <- function(count_data,
           )
 }
 
-doPatientWiseLogisticRegression <- function(cpths,
-                                            mpths) {
+doPatientWiseLogisticRegression <- function(count_data,
+                                            meta_data) {
         
-    dta <- load_multiple(cpths,
-                         mpths)
-    
-    dta$count_data <- as.matrix(dta$count_data)
-    dta$count_data <- sweep(dta$count_data,
-                            1,
-                            rowSums(dta$count_data),
-                            '/'
-                            )
-    
-    dta$count_data[is.na(dta$count_data)] <- 0.0
-
-    unipats <- unique(dta$meta_data$patient)
+    unipats <- unique(meta_data$patient)
     genesets <- list()
+    tumorgenes <- c()
+    allgenes <- c()    
 
     for (pat in unipats) {
 
-        idx <- which(dta$meta_data$patient == pat)
-        res <- doLogisiticRegression(dta$count_data[idx,],
-                                     dta$meta_data[idx,],
+        idx <- which(meta_data$patient == pat)
+        sts <- table(meta_data$tumor[idx])
+
+        if (( any(as.numeric(sts) < 10 ) | (length(sts) < 2))) {
+                next
+        }
+
+        res <- doLogisiticRegression(count_data[idx,],
+                                     meta_data[idx,],
                                      pos_only = T
                                      )
 
         genesets[[pat]] <- res$betas
+        tumorgenes <- union(tumorgenes, res$betas$genes)
+        allgenes <- union(allgenes, colnames(count_data))
     }
 
-    return(genesets)
+    return(list(genesets = genesets,
+                tumorgenes = tumorgenes,
+                allgenes = allgenes))
 }
+

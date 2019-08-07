@@ -52,7 +52,7 @@ tag <- getUniqueIdentifier()
 checkMakeDir(args$odir)
 # Set number of workers
 plan(multiprocess,
-     workers = args$n_workers) ## Parallelize using four cores
+     workers = args$n_workers) 
 
 flog.info(sprintf("Using %d workers"),args$n_workers)
 

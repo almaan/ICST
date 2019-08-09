@@ -143,10 +143,10 @@ write.table(res,
             col.names = T)
 
 # get values of top quantile
-#qv <- as.numeric(quantile(res$I,0.95))
+qv <- as.numeric(quantile(res$I,0.95))
 
 # select only top genes with positive autocorrelation
-ac_genes <- res[res$I > 0.0 & res$p.adjust < 0.05,]
+ac_genes <- res[res$I > 0.0 & res$I > qv,]
 ac_genes <- as.character(rownames(ac_genes))
 
 # generate correlation based dissimilarity  matrix

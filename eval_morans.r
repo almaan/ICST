@@ -39,6 +39,12 @@ parser$add_argument("-nw","--n_workers",
                     type = "integer",
                     default = 1)
 
+parser$add_argument("-pm","--pre_morans",
+                    type = "character",
+                    default = NULL
+                    )
+
+
 
 args <- parser$parse_args()
 
@@ -115,9 +121,18 @@ wmat <- sweep(wmat,
               '/'
               )
 
-flog.info("Computing Moran's I")
-res <- getMoransIlarge(nfmat = as.matrix(dta$count_data),
-                       wmat = as.matrix(wmat))
+if (is.null(args$pre_morans)) {
+    flog.info("Computing Moran's I")
+    res <- getMoransIlarge(nfmat = as.matrix(dta$count_data),
+                           wmat = as.matrix(wmat))
+} else {
+    res <- read.table(args$pre_morans,
+                      sep = '\t',
+                      row.names = 1,
+                      header = 1,
+                      stringsAsFactors = F
+                      )
+}
 
 #res <- getMoransIv2(nfmat = as.matrix(dta$count_data),
 #                    wmat = as.matrix(wmat))

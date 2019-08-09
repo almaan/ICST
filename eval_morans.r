@@ -127,6 +127,21 @@ rownames(res) <- colnames(dta$count_data,)
 # remove eventual nans
 res <- res[!(is.na(res$I)),]
 
+# Path for Moran's I values
+morans_opth <- paste(args$odir,
+                     paste(tag,
+                           "moransi",
+                           'tsv',
+                           sep = '.'),
+                     sep = '/')
+
+# save Moran's I values 
+write.table(res,
+            morans_opth,
+            sep = '\t',
+            quote = F,
+            col.names = T)
+
 # get values of top quantile
 #qv <- as.numeric(quantile(res$I,0.95))
 
@@ -148,10 +163,6 @@ cluster_labels <- dres$labels
 
 # Save Results -------------------
 
-# assemble heatmap object
-phm <- makeDistanceBasedHeatMap(dmat,
-                                cluster_labels)
-
 # set base of filename for results
 base_opth <- paste(args$odir,
                     paste(tag,
@@ -170,6 +181,7 @@ table_opth <- paste(base_opth,
 
 flog.info(sprintf("Saving text based results to >> %s",
                   table_opth))
+
 # save text format of results
 write.table(data.frame(cluster = cluster_labels),
             table_opth,
@@ -177,6 +189,14 @@ write.table(data.frame(cluster = cluster_labels),
              quote = F,
              row.names = rownames(dmat),
              col.names = T)
+
+flog.info(sprintf("Saving visualization of result to >> %s",
+                  image_opth))
+
+# assemble heatmap object
+phm <- makeDistanceBasedHeatMap(dmat,
+                                cluster_labels)
+
 
 # save image format of results
 png(image_opth,

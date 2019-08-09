@@ -44,6 +44,11 @@ parser$add_argument("-pm","--pre_morans",
                     default = NULL
                     )
 
+parser$add_argument("-tq","--top_quantile",
+                    type = "double",
+                    default = 0.95
+                    )
+
 
 
 args <- parser$parse_args()
@@ -158,7 +163,11 @@ write.table(res,
             col.names = T)
 
 # get values of top quantile
-qv <- as.numeric(quantile(res$I,0.95))
+args$top_quantile <- ifelse(args$top_quantile < 1,
+                            yes = args$top_quantile,
+                            no = 0.95)
+
+qv <- as.numeric(quantile(res$I,args$top_quantile))
 
 # select only top genes with positive autocorrelation
 ac_genes <- res[res$I > 0.0 & res$I > qv,]
@@ -215,8 +224,8 @@ phm <- makeDistanceBasedHeatMap(dmat,
 
 # save image format of results
 png(image_opth,
-    width = length(ac_genes) * 50 + 300,
-    height = length(ac_genes) * 50 + 100)
+    width = length(ac_genes) * 2 + 5,
+    height = length(ac_genes) * 2 + 10)
 
 print(phm)
 
